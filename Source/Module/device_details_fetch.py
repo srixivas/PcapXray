@@ -5,9 +5,7 @@ Module device_details
 import urllib.request
 import json
 import logging
-# Module Import
 import memory
-import threading
 from netaddr import *
 
 class fetchDeviceDetails:

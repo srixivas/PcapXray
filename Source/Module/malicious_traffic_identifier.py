@@ -1,11 +1,9 @@
 # Custom Module Imports
 import memory
-
-# Custom Module Import
 import communication_details_fetch
 
 # Library Import
-import os, json, sys
+import json, logging, sys
 
 # Module to Identify Possible Malicious Traffic
 
@@ -18,7 +16,6 @@ class maliciousTrafficIdentifier:
                 memory.possible_mal_traffic.append(session)
 
     def malicious_traffic_detection(self, src, dst, port):
-        very_well_known_ports = [443] # used to differentiate possible mal vs serious mal
         well_known_ports = [20, 21, 22, 23, 25, 53, 69, 80, 161, 179, 389, 443]
         # Currently whitelist all the ports
         if not communication_details_fetch.trafficDetailsFetch.is_multicast(src) and not communication_details_fetch.trafficDetailsFetch.is_multicast(dst):
@@ -56,7 +53,7 @@ class maliciousTrafficIdentifier:
                 elif sum(c.isdigit() for c in str(packet["DNS"].qd.qname).strip()) > 8:
                     return 1
             except Exception:
-                pass
+                logging.debug("covert_traffic_detection: DNS qname parse failed", exc_info=True)
         return 0
     
     
@@ -74,30 +71,26 @@ class maliciousTrafficIdentifier:
         #
         try:
             if memory.signatures == {}:
-                memory.signatures = json.load(open(sys.path[0]+"/magic_numbers.txt"))
+                with open(sys.path[0] + "/magic_numbers.txt") as f:
+                    memory.signatures = json.load(f)
             matches = []
-            # Fetch payload from Packet in hex format
             string_payload = str(payload)
             try:
                 payload = bytes(payload).hex()
             except Exception:
-                payload = str(payload)
-            # Check dictionary for possible matches
-            try:
-                for file_type in memory.signatures.keys():
-                    for sign in memory.signatures[file_type]["signs"]:
-                        offset, magic = sign.split(",")
+                payload = string_payload
+            for file_type in memory.signatures:
+                for sign in memory.signatures[file_type].get("signs", []):
+                    try:
+                        _, magic = sign.split(",", 1)
                         magic = magic.strip()
-                        #print(magic, file_type)
-                        #print(magic, string_payload, file_type)
                         if magic.lower() in payload or magic in string_payload:
                             matches.append(file_type)
-            except Exception:
-                pass
-            #print(matches, string_payload)
+                    except Exception:
+                        logging.debug("covert_payload_prediction: bad sign entry %r", sign, exc_info=True)
             return matches
         except Exception:
-            print("File signature analysis failed!")
+            logging.warning("covert_payload_prediction: file signature analysis failed", exc_info=True)
             return []
 
 def main():

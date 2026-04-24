@@ -5,13 +5,23 @@ import logging
 import sys
 import memory
 from netaddr import IPAddress
-import threading
-import base64
 import malicious_traffic_identifier
 import communication_details_fetch
 
-# Feature toggle
-tls_view_feature = False
+# Probe scapy capabilities once at import time — avoids global mutation inside __init__
+try:
+    from scapy.all import rdpcap
+    _scapy_available = True
+except ImportError:
+    _scapy_available = False
+    rdpcap = None
+
+try:
+    from scapy.all import load_layer
+    tls_view_feature = True
+except ImportError:
+    tls_view_feature = False
+    load_layer = None
 
 class PcapEngine():
     """
@@ -46,24 +56,16 @@ class PcapEngine():
         # Set Pcap Engine
         self.engine = pcap_parser_engine
 
-        # Import library for pcap parser engine selected
+        # Wire up the chosen engine — availability already probed at module load
         if pcap_parser_engine == "scapy":
-            try:
-                from scapy.all import rdpcap
-            except ImportError:
+            if not _scapy_available:
                 logging.error("Cannot import selected pcap engine: Scapy!")
                 sys.exit()
-
-            try:
-                from scapy.all import load_layer
-                global tls_view_feature
-                tls_view_feature = True
-                logging.info("tls view feature enabled")
-            except ImportError:
-                logging.info("tls view feature not enabled")
-            
             if tls_view_feature:
                 load_layer("tls")
+                logging.info("tls view feature enabled")
+            else:
+                logging.info("tls view feature not enabled")
 
             # Supress scapy warnings and prefer errors only
             logging.getLogger("scapy.runtime").setLevel(logging.ERROR)

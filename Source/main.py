@@ -1,9 +1,6 @@
 # Main File - Driver for the Application PcapXray
-
-# Import Libraries
-import os   #-- default lib - packed with python
-import sys  #-- default lib
-import datetime  #-- default lib
+import os
+import sys
 
 if sys.platform == 'darwin':
     import matplotlib
@@ -15,16 +12,9 @@ try:
     interactive_graph_support = True
 except Exception:
     print("Interactive graph in app wont work as python version/platform is not supported (will launch in default browser)")
-    pass
 
-try:
-    # for Python2
-    from Tkinter import *
-    import ttk
-except ImportError:
-    # for Python3
-    from tkinter import *
-    from tkinter import ttk
+from tkinter import *
+from tkinter import ttk
 
 # Import Custom Modules - Self created by the author
 if sys.path[0]:

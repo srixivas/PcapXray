@@ -22,10 +22,10 @@ class trafficDetailsFetch():
 
     def whois_info_fetch(self, ip):
         try:
-           whois_info = ipwhois.IPWhois(ip).lookup_rdap()
+            result = ipwhois.IPWhois(ip).lookup_rdap()
+            return result.get("asn_description", "NoWhoIsInfo")
         except Exception:
-           whois_info = "NoWhoIsInfo"
-        return whois_info
+            return "NoWhoIsInfo"
     
     """
     @staticmethod
