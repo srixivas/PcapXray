@@ -1,9 +1,8 @@
 # Custom Module Imports
 import memory
 import communication_details_fetch
-
-# Library Import
 import json, logging, sys
+from typing import Any
 
 # Module to Identify Possible Malicious Traffic
 
@@ -15,7 +14,7 @@ class maliciousTrafficIdentifier:
             if port.isdigit() and self.malicious_traffic_detection(src, dst, int(port)) == 1:
                 memory.possible_mal_traffic.append(session)
 
-    def malicious_traffic_detection(self, src, dst, port):
+    def malicious_traffic_detection(self, src: str, dst: str, port: int) -> int:
         well_known_ports = [20, 21, 22, 23, 25, 53, 69, 80, 161, 179, 389, 443]
         # Currently whitelist all the ports
         if not communication_details_fetch.trafficDetailsFetch.is_multicast(src) and not communication_details_fetch.trafficDetailsFetch.is_multicast(dst):
@@ -28,7 +27,7 @@ class maliciousTrafficIdentifier:
 
     # Covert Detection Algorithm
     @staticmethod
-    def covert_traffic_detection(packet):
+    def covert_traffic_detection(packet: Any) -> int:
         # covert ICMP - icmp tunneling ( Add TCP )
         tunnelled_protocols = ["DNS", "HTTP"]
 
@@ -59,7 +58,7 @@ class maliciousTrafficIdentifier:
     
     # Covert payload prediction algorithm
     @staticmethod
-    def covert_payload_prediction(payload):
+    def covert_payload_prediction(payload: Any) -> list[str]:
 
         ### Magic Number OR File Signature Intelligence
         # Fetch the File Signature OR Magic Numbers Intelligence from the Internet

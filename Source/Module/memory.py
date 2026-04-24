@@ -1,25 +1,9 @@
-#class memorySetting():
+from typing import Any
 
-
-global packet_db
-packet_db = {}
-
-# Schema
-# Key for access is MAC Address/IP Address
-# * Initially had mac address (assuming unique) as the only key
-#   - CTF problems sometime cause a scenario of same mac with different IP address so segregated this
-# * Otherwise each key holds
-#   - Mac Vendor
-#   - Ip address
-global lan_hosts
-lan_hosts = {}
-global destination_hosts
-destination_hosts = {}
-global tor_nodes
-tor_nodes = []
-global possible_tor_traffic
-possible_tor_traffic = []
-global malicious_traffic
-possible_mal_traffic = []
-global signatures
-signatures = {}
+packet_db: dict[str, Any] = {}
+lan_hosts: dict[str, Any] = {}
+destination_hosts: dict[str, Any] = {}
+tor_nodes: list[tuple[str, int]] = []
+possible_tor_traffic: list[str] = []
+possible_mal_traffic: list[str] = []
+signatures: dict[str, Any] = {}

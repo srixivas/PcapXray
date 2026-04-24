@@ -16,7 +16,7 @@ class fetchDeviceDetails:
         """
         self.target_oui_database = option
 
-    def fetch_info(self):
+    def fetch_info(self) -> None:
         for host in memory.lan_hosts:
             mac = host.split("/")[0]
             if self.target_oui_database == "api":
@@ -30,7 +30,7 @@ class fetchDeviceDetails:
                 ip_san = memory.lan_hosts[host]["ip"]
             memory.lan_hosts[host]["node"] = ip_san+"\n"+mac_san+"\n"+memory.lan_hosts[host]['device_vendor']
 
-    def oui_identification_via_api(self, mac):
+    def oui_identification_via_api(self, mac: str) -> str:
         url = "http://macvendors.co/api/" + mac
         api_request = urllib.request.Request(url, headers={'User-Agent':'PcapXray'})
         try:
@@ -43,7 +43,7 @@ class fetchDeviceDetails:
             logging.info("device_details module: oui identification failure via api" + str(e))
             return "Unknown", "Unknown"
 
-    def oui_identification_via_ieee(self, mac):
+    def oui_identification_via_ieee(self, mac: str) -> tuple[str, str]:
         try:
             mac_obj = EUI(mac)
             mac_oui = mac_obj.oui

@@ -1,18 +1,13 @@
-import memory 
-
-# Library Import
+import memory
 import ipwhois
-#from dns import reversename, resolver
 import socket
-# Module Import
-#import pcap_reader
 import netaddr
 
 # Class Communication or Traffic Details Fetch
 
 class trafficDetailsFetch():
 
-    def __init__(self, option):
+    def __init__(self, option: str) -> None:
         for host in memory.destination_hosts:
             if "domain_name" not in memory.destination_hosts[host]:
                 if option == "whois":
@@ -20,7 +15,7 @@ class trafficDetailsFetch():
                 else:
                     memory.destination_hosts[host]["domain_name"] = trafficDetailsFetch.dns(host)
 
-    def whois_info_fetch(self, ip):
+    def whois_info_fetch(self, ip: str) -> str:
         try:
             result = ipwhois.IPWhois(ip).lookup_rdap()
             return result.get("asn_description", "NoWhoIsInfo")
@@ -42,7 +37,7 @@ class trafficDetailsFetch():
     """
 
     @staticmethod
-    def dns(ip):
+    def dns(ip: str) -> str:
         try:
             dns_info = socket.gethostbyaddr(ip)[0]
         except OSError:
@@ -50,7 +45,7 @@ class trafficDetailsFetch():
         return dns_info
 
     @staticmethod
-    def is_multicast(ip):
+    def is_multicast(ip: str) -> bool:
         if ":" in ip:
             groups = ip.split(":")
             if "FF0" in groups[0].upper():

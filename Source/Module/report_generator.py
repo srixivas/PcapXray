@@ -1,17 +1,16 @@
 # Report Generation
 import os, json
-from scapy.all import *
 import memory
 
 class reportGen:
 
-    def __init__(self, path, filename):
+    def __init__(self, path: str, filename: str) -> None:
         self.directory = os.path.join(path, "Report")
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
         self.filename = filename
 
-    def communicationDetailsReport(self):
+    def communicationDetailsReport(self) -> None:
         try:
             comm_file = os.path.join(self.directory, self.filename + "_communication_details.txt")
             text_handle = open(comm_file, "w")
@@ -25,7 +24,7 @@ class reportGen:
         except Exception as e:
             print("Could not create the report text file !!!!! Please debug error %s" % (str(e)))
 
-    def deviceDetailsReport(self):
+    def deviceDetailsReport(self) -> None:
         try:
             device_file = os.path.join(self.directory, self.filename + "_device_details.txt")
             text_handle = open(device_file, "w")
@@ -34,7 +33,7 @@ class reportGen:
         except Exception as e:
             print("Could not create the report text file !!!!! Please debug error %s" % (str(e)))
 
-    def packetDetails(self):
+    def packetDetails(self) -> None:
         try:
             packet_file = os.path.join(self.directory, self.filename + "_packet_details.txt")
             text_handle = open(packet_file, "w")
@@ -44,7 +43,7 @@ class reportGen:
             print("Could not create the report text file, trying backup mode !!!!! %s" % (str(e)))
             self.backupReport()
 
-    def backupReport(self):
+    def backupReport(self) -> None:
         try:
             packet_file = os.path.join(self.directory, self.filename + "_packet_details.txt")
             text_handle = open(packet_file, "w")

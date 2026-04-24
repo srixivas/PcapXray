@@ -1,34 +1,28 @@
-# Dependancy Modules
+# PcapXray dependencies — Python 3.10+
 
-# Pcap Reader and Packet Handler
-scapy
-pyshark
+# PCAP parsing engines
+scapy>=2.5.0
+pyshark>=0.6
 
-# Not Needed for Linux, Needed only for MAC when Scapy is not properly downloaded
-#pcapy
-#dnet #libdnet
+# IP/network utilities
+ipwhois>=1.2.0
+netaddr>=0.9.0
 
-# ipwhois
-ipwhois
+# Image processing (Resampling.LANCZOS requires >=10.0.0)
+pillow>=10.0.0
 
-#netaddr - IP addresses handling
-netaddr
+# Tor consensus
+stem>=1.8.2
 
-#Pillow - Image Processing
-pillow
+# Graph rendering
+networkx>=3.0
+graphviz>=0.20
 
-#Tor
-stem
+# Interactive visualization
+pyvis>=0.3.2
 
-#Graphics
-networkx
-graphviz
-matplotlib
-
-# Interactive Maps
+# CEF embedded browser (macOS broken — being replaced by pywebview in Phase 4)
 cefpython3
-pyvis
 
-# Ciphersuites
-cryptography
-
+# TLS cipher suite parsing
+cryptography>=41.0.0

@@ -31,7 +31,7 @@ class PcapEngine():
         * Pyshark
     """
 
-    def __init__(self, pcap_file_name, pcap_parser_engine="scapy"):
+    def __init__(self, pcap_file_name: str, pcap_parser_engine: str = "scapy") -> None:
         """
         Init function imports libraries based on the parser engine selected
         Return:
@@ -90,7 +90,7 @@ class PcapEngine():
         # <TODO>: Add other pcap engine modules to generate packetDB
 
     #@retry(tries=5, errors=memory.CouldNotLock)
-    def analyse_packet_data(self):
+    def analyse_packet_data(self) -> None:
             #with memory.get_lock():
             """
             PcapXray runs only one O(N) packets once to memoize

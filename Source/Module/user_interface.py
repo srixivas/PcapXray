@@ -1,24 +1,17 @@
 import sys
+import os
+import time
+import threading
 
 if sys.platform == 'darwin':
     import matplotlib
     matplotlib.use('TkAgg')
 
-try:
-    # for Python2
-    from Tkinter import *
-    import ttk
-    import tkFileDialog as fd
-    import Tkconstants
-    import tkMessageBox as mb
-    import Queue as q
-except ImportError:
-    # for Python3
-    from tkinter import *
-    from tkinter import ttk
-    from tkinter import filedialog as fd
-    from tkinter import messagebox as mb
-    import queue as q
+from tkinter import *
+from tkinter import ttk
+from tkinter import filedialog as fd
+from tkinter import messagebox as mb
+import queue as q
 
 import pcap_reader
 import plot_lan_network
@@ -26,11 +19,8 @@ import communication_details_fetch
 import device_details_fetch
 import report_generator
 import tor_traffic_handle
-import time
-import threading
 import memory
-from PIL import Image,ImageTk
-import os, sys
+from PIL import Image, ImageTk
 
 class pcapXrayGui:
     def __init__(self, base):

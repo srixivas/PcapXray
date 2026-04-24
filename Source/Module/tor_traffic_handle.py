@@ -1,10 +1,4 @@
-# Custom Module Imports
 import memory
-
-# For tests
-#import pcap_reader
-
-# Library Import
 from stem.descriptor import remote
 
 # Tor Traffic Module Class
@@ -15,14 +9,14 @@ class torTrafficHandle():
         if not memory.tor_nodes:
             self.get_consensus_data()
 
-    def get_consensus_data(self):
+    def get_consensus_data(self) -> None:
         try:
             for desc in remote.get_consensus().run():
                 memory.tor_nodes.append((desc.address, desc.or_port))
         except Exception as exc:
             print("Unable to retrieve the consensus: %s" % exc)
 
-    def tor_traffic_detection(self):
+    def tor_traffic_detection(self) -> None:
         if memory.tor_nodes:
             for session in memory.packet_db:
                 current_session = session.split("/")
