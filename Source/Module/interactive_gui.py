@@ -9,7 +9,7 @@ interactive_graph_support = False
 try:
     from cefpython3 import cefpython as cef
     interactive_graph_support = True
-except:
+except Exception:
     print("Interactive graph in app wont work as python version/platform is not supported (will launch in default browser)")
     pass
 
@@ -162,7 +162,7 @@ class BrowserFrame(tk.Frame):
                 # window asking whether to Reopen that window.
                 # noinspection PyUnresolvedReferences
                 return objc.pyobjc_id(NSApp.windows()[-1].contentView())
-            except:
+            except Exception:
                 raise Exception("Couldn't obtain window handle")
             """
             print("Mac environment: Couldn't obtain window handle")

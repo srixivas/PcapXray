@@ -46,16 +46,16 @@ class maliciousTrafficIdentifier:
                 return 1
             elif "padding" in packet:
                 return 1
-            elif filter(lambda x: x in str(packet["ICMP"].payload), tunnelled_protocols):
+            elif any(x in str(packet["ICMP"].payload) for x in tunnelled_protocols):
                 return 1
         elif "DNS" in packet:
             #print(packet["DNS"].qd.qname)
             try:
                 if communication_details_fetch.trafficDetailsFetch.dns(packet["DNS"].qd.qname.strip()) == "NotResolvable":
                     return 1
-                elif len(filter(str.isdigit, str(packet["DNS"].qd.qname).strip())) > 8:
+                elif sum(c.isdigit() for c in str(packet["DNS"].qd.qname).strip()) > 8:
                     return 1
-            except:
+            except Exception:
                 pass
         return 0
     
@@ -80,7 +80,7 @@ class maliciousTrafficIdentifier:
             string_payload = str(payload)
             try:
                 payload = bytes(payload).hex()
-            except:
+            except Exception:
                 payload = str(payload)
             # Check dictionary for possible matches
             try:
@@ -92,11 +92,11 @@ class maliciousTrafficIdentifier:
                         #print(magic, string_payload, file_type)
                         if magic.lower() in payload or magic in string_payload:
                             matches.append(file_type)
-            except:
+            except Exception:
                 pass
             #print(matches, string_payload)
             return matches
-        except:
+        except Exception:
             print("File signature analysis failed!")
             return []
 

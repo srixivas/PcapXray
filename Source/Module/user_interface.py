@@ -316,7 +316,7 @@ class pcapXrayGui:
         #self.canvas.grid(row=0, column=0, sticky=N + S + E + W)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         #self.canvas.pack(side = RIGHT, fill = BOTH, expand = True)
-        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom),Image.ANTIALIAS))#.convert('RGB'))
+        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom), Image.Resampling.LANCZOS))#.convert('RGB'))
         self.canvas.create_image(0,0, image=self.img)
         self.canvas.config(scrollregion=self.canvas.bbox(ALL))
         self.xscrollbar.config(command=self.canvas.xview)

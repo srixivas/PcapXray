@@ -2,7 +2,7 @@
 Module device_details
 """
 # Library Import
-import urllib#.request
+import urllib.request
 import json
 import logging
 # Module Import

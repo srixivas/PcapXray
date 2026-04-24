@@ -50,16 +50,16 @@ class PcapEngine():
         if pcap_parser_engine == "scapy":
             try:
                 from scapy.all import rdpcap
-            except:
+            except ImportError:
                 logging.error("Cannot import selected pcap engine: Scapy!")
                 sys.exit()
-            
+
             try:
                 from scapy.all import load_layer
                 global tls_view_feature
                 tls_view_feature = True
                 logging.info("tls view feature enabled")
-            except:
+            except ImportError:
                 logging.info("tls view feature not enabled")
             
             if tls_view_feature:
@@ -75,7 +75,7 @@ class PcapEngine():
         elif pcap_parser_engine == "pyshark":
             try:
                 import pyshark
-            except:
+            except ImportError:
                 logging.error("Cannot import selected pcap engine: PyShark!")
                 sys.exit()
             self.packets = pyshark.FileCapture(pcap_file_name, include_raw=True, use_json=True)
@@ -116,11 +116,11 @@ class PcapEngine():
                     # * ExHandler as temperory fix
                     try:
                         private_source = IPAddress(packet[IP].src).is_private()
-                    except:
+                    except Exception:
                         private_source = None
                     try:
                         private_destination = IPAddress(packet[IP].dst).is_private()
-                    except:
+                    except Exception:
                         private_destination = None
             
                 elif "IP" in packet: # IPV4 Condition
@@ -304,7 +304,7 @@ class PcapEngine():
                         try:
                             memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet.get_raw_packet()))
                             payload_string = packet.get_raw_packet()
-                        except:
+                        except Exception:
                             memory.packet_db[source_private_ip]["Payload"][payload].append("")
 
                     elif self.engine == "scapy":

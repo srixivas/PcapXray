@@ -23,7 +23,7 @@ class trafficDetailsFetch():
     def whois_info_fetch(self, ip):
         try:
            whois_info = ipwhois.IPWhois(ip).lookup_rdap()
-        except:
+        except Exception:
            whois_info = "NoWhoIsInfo"
         return whois_info
     
@@ -45,7 +45,7 @@ class trafficDetailsFetch():
     def dns(ip):
         try:
             dns_info = socket.gethostbyaddr(ip)[0]
-        except:
+        except OSError:
             dns_info = "NotResolvable"
         return dns_info
 

@@ -48,7 +48,7 @@ class plotLan:
             }
         }
 
-        self.sessions = memory.packet_db.keys()
+        self.sessions = list(memory.packet_db.keys())
         #device_details_fetch.fetchDeviceDetails("ieee").fetch_info()
         if option == "Malicious" or option == "All":
             self.mal_identify = malicious_traffic_identifier.maliciousTrafficIdentifier()
