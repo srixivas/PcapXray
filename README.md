@@ -1,6 +1,6 @@
-# PcapXray [![Build Status](https://travis-ci.org/Srinivas11789/PcapXray.svg?branch=master)](https://travis-ci.org/Srinivas11789/PcapXray) [![codecov](https://codecov.io/gh/Srinivas11789/PcapXray/branch/master/graph/badge.svg)](https://codecov.io/gh/Srinivas11789/PcapXray) [![defcon27](https://img.shields.io/badge/defcon27-demolabs-blue)](https://www.defcon.org/html/defcon-27/dc-27-demolabs.html#PcapXray)
+# PcapXray [![CI](https://github.com/srixivas/PcapXray/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/srixivas/PcapXray/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/srixivas/PcapXray/branch/master/graph/badge.svg)](https://codecov.io/gh/srixivas/PcapXray) [![defcon27](https://img.shields.io/badge/defcon27-demolabs-blue)](https://www.defcon.org/html/defcon-27/dc-27-demolabs.html#PcapXray)
     A Network Forensics Tool - To visualize a Packet Capture offline as a Network Diagram including device identification, highlight important communication and file extraction
-![Alt text](https://srinivas11789.github.io/PcapXray/logo.png?width=20px "PcapXray")
+![PcapXray](logo.png "PcapXray")
 ## PcapXray Design Specification
 Wiki has more help too.
 
@@ -11,7 +11,7 @@ Wiki has more help too.
 * Investigation of a Pcap file takes a long time given initial glitch to start the investigation
 *	Faced by every forensics investigator and anyone who is analyzing the network
 
-* Location: https://github.com/Srinivas11789/PcapXray
+* Location: https://github.com/srixivas/PcapXray
 
 ### Solution: Speed up the investigation process
 * Make a network diagram with the following features from a Pcap file
@@ -25,9 +25,9 @@ Tool Highlights:
   * Device Details
   
 ### Tool Image:
-![Alt text](https://srinivas11789.github.io/PcapXray/Samples/screen2_6_1.png?raw=true)
+![Screen 1](Samples/screen2_6_1.png)
 
-![Alt text](https://srinivas11789.github.io/PcapXray/Samples/screen2_6_2.png?raw=true)
+![Screen 2](Samples/screen2_6_2.png)
 
 ### Components:
 * Network Diagram 
@@ -82,7 +82,7 @@ python Source/main.py
   *	Matplotlib – plot graph (not used as of now)
   
 ### Demo
-![Alt text](https://srinivas11789.github.io/PcapXray/Samples/demo2_6.gif?raw=true)
+![Demo](Samples/demo2_6.gif)
 
 ### Getting started:
 * Clone the repository

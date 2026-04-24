@@ -8,6 +8,8 @@ import logging
 import memory
 from netaddr import *
 
+log = logging.getLogger(__name__)
+
 class fetchDeviceDetails:
 
     def __init__(self, option="ieee"):
@@ -40,7 +42,7 @@ class fetchDeviceDetails:
             #reportThread.start()
             return details["result"]["company"], details["result"]["address"]
         except Exception as e:
-            logging.info("device_details module: oui identification failure via api" + str(e))
+            log.warning("OUI lookup via API failed: %s", e)
             return "Unknown", "Unknown"
 
     def oui_identification_via_ieee(self, mac: str) -> tuple[str, str]:
@@ -49,7 +51,7 @@ class fetchDeviceDetails:
             mac_oui = mac_obj.oui
             return mac_oui.registration().org, mac_oui.registration().address
         except Exception as e:
-            logging.info("device_details module: oui identification failure via ieee " + str(e))
+            log.warning("OUI lookup via IEEE failed: %s", e)
             return "Unknown", "Unknown"
 
 def main():

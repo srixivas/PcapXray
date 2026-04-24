@@ -1,17 +1,26 @@
 # Main File - Driver for the Application PcapXray
 import os
 import sys
+import logging
 
-if sys.platform == 'darwin':
-    import matplotlib
-    matplotlib.use('TkAgg')
+_log_file = os.path.join(os.path.expanduser("~"), "PcapXray.log")
+logging.basicConfig(
+    level=logging.DEBUG if os.environ.get("PCAPXRAY_DEBUG") else logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(_log_file, mode="w"),
+        logging.StreamHandler(),
+    ],
+)
+log = logging.getLogger(__name__)
+log.info("PcapXray starting — log file: %s", _log_file)
 
 interactive_graph_support = False
 try:
     from cefpython3 import cefpython as cef
     interactive_graph_support = True
 except Exception:
-    print("Interactive graph in app wont work as python version/platform is not supported (will launch in default browser)")
+    log.warning("cefpython3 unavailable — interactive graph will open in default browser")
 
 from tkinter import *
 from tkinter import ttk

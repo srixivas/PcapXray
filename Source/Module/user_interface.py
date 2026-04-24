@@ -1,13 +1,12 @@
 import sys
 import os
 import time
+import logging
 import threading
 
-if sys.platform == 'darwin':
-    import matplotlib
-    matplotlib.use('TkAgg')
-
 from tkinter import *
+
+log = logging.getLogger(__name__)
 from tkinter import ttk
 from tkinter import filedialog as fd
 from tkinter import messagebox as mb
@@ -140,23 +139,20 @@ class pcapXrayGui:
 
     def browse_directory(self, option):
         if option == "pcap":
-            # Reference: http://effbot.org/tkinterbook/tkinter-dialog-windows.htm
-            self.pcap_file.set(fd.askopenfilename(initialdir = sys.path[0],title = "Select Packet Capture File!",filetypes = (("All","*.pcap *.pcapng"),("pcap files","*.pcap"),("pcapng files","*.pcapng"))))
-            self.filename = self.pcap_file.get().replace(".pcap","")
+            self.pcap_file.set(fd.askopenfilename(initialdir=sys.path[0], title="Select Packet Capture File!", filetypes=(("All", "*.pcap *.pcapng"), ("pcap files", "*.pcap"), ("pcapng files", "*.pcapng"))))
+            self.filename = self.pcap_file.get().replace(".pcap", "").replace(".pcapng", "")
             if "/" in self.filename:
                 self.filename = self.filename.split("/")[-1]
-            #,("all files","*.*")
-            #self.filename_field.delete(0, END)
-            #self.filename_field.insert(0, self.pcap_file)
-            print(self.filename)
-            print(self.pcap_file)
         else:
             self.destination_report.set(fd.askdirectory())
             if self.destination_report.get():
                 if not os.access(self.destination_report.get(), os.W_OK):
-                    mb.showerror("Error","Permission denied to create report! Run with higher privilege.")
+                    mb.showerror("Error", "Permission denied to create report! Run with higher privilege.")
             else:
                 mb.showerror("Error", "Enter a output directory!")
+        # Restore focus to main window after any native dialog (macOS loses focus otherwise)
+        self.base.lift()
+        self.base.focus_force()
     
     """
     def update_ips(self, direction):
@@ -170,14 +166,32 @@ class pcapXrayGui:
             self.from_menu['values'] = self.from_hosts
     """
 
+    def _run_in_thread(self, fn, *args) -> tuple[threading.Thread, list]:
+        """Run fn(*args) in a daemon thread; store any exception in exc_box[0]."""
+        exc_box: list = []
+        def wrapper():
+            try:
+                fn(*args)
+            except Exception as e:
+                exc_box.append(e)
+        t = threading.Thread(target=wrapper, daemon=True)
+        t.start()
+        return t, exc_box
+
+    def _poll_thread(self, thread: threading.Thread) -> None:
+        """Block the caller while driving the Tk event loop until thread finishes."""
+        while thread.is_alive():
+            self.base.update()
+            thread.join(timeout=0.05)
+
     def pcap_analyse(self):
         if not os.access(self.destination_report.get(), os.W_OK):
-            mb.showerror("Error","Permission denied to create report! Run with higher privilege.")
+            mb.showerror("Error", "Permission denied to create report! Run with higher privilege.")
             return
 
+        log.info("pcap_analyse: file=%s", self.pcap_file.get())
         if os.path.exists(self.pcap_file.get()):
-            
-            # Disable controls when performing analysis
+
             self.trigger['state'] = 'disabled'
             self.ibutton['state'] = 'disabled'
             self.to_menu['state'] = 'disabled'
@@ -186,110 +200,73 @@ class pcapXrayGui:
 
             self.progressbar.start()
 
-            # PcapRead - First of All!
-            #result = q.Queue()
-            packet_read = threading.Thread(target=pcap_reader.PcapEngine,args=(self.pcap_file.get(), self.engine.get()))
-            packet_read.start()
-            while packet_read.is_alive():
-                self.progressbar.update()
-            packet_read.join()
+            packet_read, exc_box = self._run_in_thread(pcap_reader.PcapEngine, self.pcap_file.get(), self.engine.get())
+            self._poll_thread(packet_read)
             self.progressbar.stop()
 
-            # Report Generation of the PcapData
-            
-            
-            #packet_read.join()
-            #self.capture_read = result.get()
-            reportThreadpcap = threading.Thread(target=report_generator.reportGen(self.destination_report.get(), self.filename).packetDetails,args=())
-            reportThreadpcap.start()
-            #self.option.set("Tor")
-            #self.option.trace("w",self.map_select)
-            #self.option.set("Tor")
-            
-            # Reset
+            if exc_box:
+                log.error("PCAP analysis failed: %s", exc_box[0])
+                mb.showerror("Analysis Error", f"PCAP analysis failed:\n{exc_box[0]}")
+                self._re_enable_controls()
+                return
+
+            log.info("pcap_analyse: read complete, generating packet report")
+            threading.Thread(target=report_generator.reportGen(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
+
             self.details_fetch = 0
             self.to_hosts = ["All"]
             self.from_hosts = ["All"]
-
-
-            # Default filter values
-            self.to_menu['values'] = self.to_hosts
-            self.from_menu['values'] = self.from_hosts
             self.from_menu.set("All")
             self.to_menu.set("All")
             self.option.set("All")
-            
-            """
-            # Filters update 
-            # Reset Option Menu with the values fetched from the pcap
-            menu1 = self.to_menu["menu"]
-            menu1.delete(0, "end")
-            for ip in memory.destination_hosts:
-                menu1.add_command(label=ip, command=lambda value=ip: self.to_ip.set(value))
-            menu1.add_command(label="All", command=lambda value="All": self.to_ip.set(value))
-            menu = self.from_menu["menu"]
-            menu.delete(0, "end")
-            for mac in memory.lan_hosts:
-                menu.add_command(label=memory.lan_hosts[mac]["ip"], command=lambda value=memory.lan_hosts[mac]["ip"]: self.from_ip.set(value))
-                menu1.add_command(label=memory.lan_hosts[mac]["ip"], command=lambda value=memory.lan_hosts[mac]["ip"]: self.to_ip.set(value))
-            menu.add_command(label="All", command=lambda value="All": self.from_ip.set(value))
-            """
+
             self.progressbar.start()
             self.to_hosts += list(memory.destination_hosts.keys())
             for mac in list(memory.lan_hosts.keys()):
-                self.progressbar.update()
+                self.base.update()
                 self.from_hosts.append(memory.lan_hosts[mac]["ip"])
             self.to_hosts = list(set(self.to_hosts + self.from_hosts))
             self.to_menu['values'] = self.to_hosts
             self.from_menu['values'] = self.from_hosts
             self.progressbar.stop()
 
-            # Enable controls
-            self.trigger['state'] = 'normal'
-            self.ibutton['state'] = 'normal'
-            self.to_menu['state'] = 'normal'
-            self.from_menu['state'] = 'normal'
-            self.analyze_button['state'] = 'normal'
+            self._re_enable_controls()
         else:
-            mb.showerror("Error","File Not Found !")
+            mb.showerror("Error", "File Not Found !")
+
+    def _re_enable_controls(self) -> None:
+        self.trigger['state'] = 'normal'
+        self.ibutton['state'] = 'normal'
+        self.to_menu['state'] = 'normal'
+        self.from_menu['state'] = 'normal'
+        self.analyze_button['state'] = 'normal'
 
     def generate_graph(self):
+        log.info("generate_graph: option=%s to=%s from=%s", self.option.get(), self.to_ip.get(), self.from_ip.get())
         if self.details_fetch == 0:
-
-            # Threads to fetch communication and device details
-            #result = q.Queue()
-            t = threading.Thread(target=communication_details_fetch.trafficDetailsFetch,args=("sock",))
-            t1 = threading.Thread(target=device_details_fetch.fetchDeviceDetails("ieee").fetch_info, args=())
-            t.start()
-            t1.start()
+            t, _ = self._run_in_thread(communication_details_fetch.trafficDetailsFetch, "sock")
+            t1, _ = self._run_in_thread(device_details_fetch.fetchDeviceDetails("ieee").fetch_info)
             self.progressbar.start()
-            while t.is_alive():
-                  self.progressbar.update()
-            t.join()
-            t1.join()
-            
-            # Report Generation Control and Filters update (Here?)
+            self._poll_thread(t)
+            self._poll_thread(t1)
+            self.progressbar.stop()
+
             self.details_fetch = 1
-            
-            # Report Creation Threads
-            reportThread = threading.Thread(target=report_generator.reportGen(self.destination_report.get(), self.filename).communicationDetailsReport,args=())
-            reportThread.start()
-            reportThread = threading.Thread(target=report_generator.reportGen(self.destination_report.get(), self.filename).deviceDetailsReport,args=())
-            reportThread.start()
+            rpt = report_generator.reportGen(self.destination_report.get(), self.filename)
+            threading.Thread(target=rpt.communicationDetailsReport, daemon=True).start()
+            threading.Thread(target=rpt.deviceDetailsReport, daemon=True).start()
 
-            self.progressbar.stop()
-        
-        # Loding the generated map
-        options = self.option.get()+"_"+self.to_ip.get().replace(".","-")+"_"+self.from_ip.get().replace(".", "-")
-        self.image_file = os.path.join(self.destination_report.get(), "Report", self.filename+"_"+options+".png")
+        options = self.option.get() + "_" + self.to_ip.get().replace(".", "-") + "_" + self.from_ip.get().replace(".", "-")
+        self.image_file = os.path.join(self.destination_report.get(), "Report", self.filename + "_" + options + ".png")
         if not os.path.exists(self.image_file):
-            t1 = threading.Thread(target=plot_lan_network.plotLan, args=(self.filename, self.destination_report.get(), self.option.get(), self.to_ip.get(), self.from_ip.get()))
-            t1.start()
+            t1, exc_box = self._run_in_thread(plot_lan_network.plotLan, self.filename, self.destination_report.get(), self.option.get(), self.to_ip.get(), self.from_ip.get())
             self.progressbar.start()
-            while t1.is_alive():
-                 self.progressbar.update()
-            t1.join()
+            self._poll_thread(t1)
             self.progressbar.stop()
+            if exc_box:
+                log.error("Graph generation failed: %s", exc_box[0])
+                mb.showerror("Graph Error", f"Graph generation failed:\n{exc_box[0]}")
+                return
             self.label.grid_forget()
             self.load_image()
         else:
@@ -306,7 +283,7 @@ class pcapXrayGui:
         #self.canvas.grid(row=0, column=0, sticky=N + S + E + W)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         #self.canvas.pack(side = RIGHT, fill = BOTH, expand = True)
-        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom), Image.Resampling.LANCZOS))#.convert('RGB'))
+        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom), Image.LANCZOS))#.convert('RGB'))
         self.canvas.create_image(0,0, image=self.img)
         self.canvas.config(scrollregion=self.canvas.bbox(ALL))
         self.xscrollbar.config(command=self.canvas.xview)

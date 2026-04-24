@@ -4,6 +4,8 @@ import communication_details_fetch
 import json, logging, sys
 from typing import Any
 
+log = logging.getLogger(__name__)
+
 # Module to Identify Possible Malicious Traffic
 
 class maliciousTrafficIdentifier:
@@ -52,7 +54,7 @@ class maliciousTrafficIdentifier:
                 elif sum(c.isdigit() for c in str(packet["DNS"].qd.qname).strip()) > 8:
                     return 1
             except Exception:
-                logging.debug("covert_traffic_detection: DNS qname parse failed", exc_info=True)
+                log.debug("covert_traffic_detection: DNS qname parse failed", exc_info=True)
         return 0
     
     
@@ -86,10 +88,10 @@ class maliciousTrafficIdentifier:
                         if magic.lower() in payload or magic in string_payload:
                             matches.append(file_type)
                     except Exception:
-                        logging.debug("covert_payload_prediction: bad sign entry %r", sign, exc_info=True)
+                        log.debug("covert_payload_prediction: bad sign entry %r", sign, exc_info=True)
             return matches
         except Exception:
-            logging.warning("covert_payload_prediction: file signature analysis failed", exc_info=True)
+            log.warning("covert_payload_prediction: file signature analysis failed", exc_info=True)
             return []
 
 def main():

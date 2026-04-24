@@ -4,7 +4,9 @@ Module pcap_reader
 import logging
 import sys
 import memory
-from netaddr import IPAddress
+
+log = logging.getLogger(__name__)
+import ipaddress
 import malicious_traffic_identifier
 import communication_details_fetch
 
@@ -59,26 +61,26 @@ class PcapEngine():
         # Wire up the chosen engine — availability already probed at module load
         if pcap_parser_engine == "scapy":
             if not _scapy_available:
-                logging.error("Cannot import selected pcap engine: Scapy!")
+                log.error("Cannot import selected pcap engine: Scapy!")
                 sys.exit()
             if tls_view_feature:
                 load_layer("tls")
-                logging.info("tls view feature enabled")
+                log.info("TLS view feature enabled")
             else:
-                logging.info("tls view feature not enabled")
+                log.info("TLS view feature not available")
 
-            # Supress scapy warnings and prefer errors only
+            # Suppress scapy warnings and prefer errors only
             logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
-            # Scapy sessions and other types use more O(N) iterations so just
-            # - use rdpcap + our own iteration (create full duplex streams)
+            log.info("Reading PCAP: %s", pcap_file_name)
             self.packets = rdpcap(pcap_file_name)
-        
+            log.info("PCAP read: %d packets", len(self.packets))
+
         elif pcap_parser_engine == "pyshark":
             try:
                 import pyshark
             except ImportError:
-                logging.error("Cannot import selected pcap engine: PyShark!")
+                log.error("Cannot import selected pcap engine: PyShark!")
                 sys.exit()
             self.packets = pyshark.FileCapture(pcap_file_name, include_raw=True, use_json=True)
             #self.packets.load_packets()
@@ -117,11 +119,11 @@ class PcapEngine():
                     # TODO: Fix weird ipv6 errors in pyshark engine
                     # * ExHandler as temperory fix
                     try:
-                        private_source = IPAddress(packet[IP].src).is_private()
+                        private_source = ipaddress.ip_address(packet[IP].src).is_private
                     except Exception:
                         private_source = None
                     try:
-                        private_destination = IPAddress(packet[IP].dst).is_private()
+                        private_destination = ipaddress.ip_address(packet[IP].dst).is_private
                     except Exception:
                         private_destination = None
             
@@ -130,8 +132,8 @@ class PcapEngine():
                     # Handle IP packets that originated from LAN (Internal Network)
                     #print(packet["IP"].version == "4")
                     IP = "IP"
-                    private_source = IPAddress(packet[IP].src).is_private()
-                    private_destination = IPAddress(packet[IP].dst).is_private()
+                    private_source = ipaddress.ip_address(packet[IP].src).is_private
+                    private_destination = ipaddress.ip_address(packet[IP].dst).is_private
 
                 ## Second, Operate based on payloads above IP (L3) to create the key for session
                 # <TODO> add more support as we improvise
@@ -323,8 +325,7 @@ class PcapEngine():
                                 memory.packet_db[source_private_ip]["Ethernet"]["dst"] = packet["Ether"].src
                             payload = "reverse"
                         
-                        # Payload 
-                        global tls_view_feature
+                        # Payload
                         if "TCP" in packet:
                             if tls_view_feature:
                                 if "TLS" in packet:

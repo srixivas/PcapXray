@@ -5,6 +5,7 @@ import tor_traffic_handle
 import malicious_traffic_identifier
 #import device_details_fetch
 import memory
+import logging
 
 import networkx as nx
 #import matplotlib.pyplot as plt
@@ -15,9 +16,12 @@ import os
 
 from pyvis.network import Network
 
+log = logging.getLogger(__name__)
+
 class plotLan:
 
     def __init__(self, filename, path, option="Tor", to_ip="All", from_ip="All"):
+        log.info("plotLan init: option=%s to=%s from=%s", option, to_ip, from_ip)
         self.directory = os.path.join(path, "Report")
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
@@ -49,12 +53,19 @@ class plotLan:
         }
 
         self.sessions = list(memory.packet_db.keys())
+        log.info("plotLan: %d sessions in packet_db", len(self.sessions))
         #device_details_fetch.fetchDeviceDetails("ieee").fetch_info()
         if option == "Malicious" or option == "All":
+            log.info("Running malicious traffic identification")
             self.mal_identify = malicious_traffic_identifier.maliciousTrafficIdentifier()
+            log.info("Malicious traffic identification done")
         if option == "Tor" or option == "All":
+            log.info("Running Tor traffic detection")
             self.tor_identify = tor_traffic_handle.torTrafficHandle().tor_traffic_detection()
+            log.info("Tor traffic detection done")
+        log.info("Calling draw_graph")
         self.draw_graph(option, to_ip, from_ip)
+        log.info("draw_graph complete")
     
     def apply_styles(self, graph, styles):
         graph.graph_attr.update(
@@ -99,7 +110,7 @@ class plotLan:
 
         f.attr('node', shape='circle')
 
-        print("Starting Graph Plotting")
+        log.info("draw_graph: option=%s sessions=%d", option, len(self.sessions))
         edge_present = False
 
         mal, tor, http, https, icmp, dns, clear_text, unknown, covert = 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -156,7 +167,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     #if (curr_node, curr_node, title=curr_node, color="yellow") not in vis_nodes:
                     #    vis_nodes.append((curr_node, curr_node, title=curr_node, color="yellow"))
@@ -293,7 +304,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     if port == "80" and curr_node != destination:
                         f.edge(curr_node, destination, label='HTTP: ' + str(map_dst)+": "+dlabel, color = "green")
@@ -351,7 +362,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     if port == "443" and curr_node != destination:
                         f.edge(curr_node, destination, label='HTTPS: ' + str(map_dst)+": "+dlabel, color = "blue")
@@ -409,7 +420,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     if session in memory.possible_tor_traffic and curr_node != destination:
                         f.edge(curr_node, destination, label='TOR: ' + str(map_dst) ,color="white")
@@ -469,7 +480,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     if session in memory.possible_mal_traffic and curr_node != destination:
                         f.edge(curr_node, destination, label='Malicious: ' + str(map_dst) ,color="red")
@@ -526,7 +537,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     if protocol == "ICMP" and curr_node != destination:
                         f.edge(curr_node, destination, label='ICMP: ' + str(map_dst) ,color="black")
@@ -582,7 +593,7 @@ class plotLan:
                         interactive_graph.add_node(str(curr_node), str(curr_node), title=str(curr_node), color="yellow")
                         interactive_graph.add_node(str(destination), str(destination), title=str(destination), color="yellow")
                     except Exception as e:
-                        print("Interactive graph error occurred: "+str(e))
+                        log.warning("Interactive graph node error: %s", e)
 
                     if port == "53" and curr_node != destination:
                         f.edge(curr_node, destination, label='DNS: ' + str(map_dst) ,color="orange")
@@ -591,15 +602,22 @@ class plotLan:
                         if edge_present == False:
                             edge_present = True
 
-        if edge_present == False:
-            f.attr(label="No "+option+" Traffic between nodes!",engine='circo', size="5, 5", dpi="300")
+        if not edge_present:
+            # Discard all the bloated disconnected nodes — lay out a trivial graph instead.
+            f = Digraph("no_traffic", filename=self.filename, engine="dot", format="png")
+            f.attr(label="No " + option + " Traffic between nodes!", fontsize="20",
+                   bgcolor="grey", size="5,5", dpi="300")
 
-        self.apply_styles(f,self.styles)
-            
-        f.render()
+        self.apply_styles(f, self.styles)
 
+        log.info("Rendering graphviz PNG: %s", self.filename)
+        f.render(timeout=30)
+        log.info("Graphviz render complete")
+
+        log.info("Saving interactive HTML: %s.html", self.filename)
         interactive_graph.show_buttons(filter_=['physics'])
-        interactive_graph.save_graph(self.filename+".html")
+        interactive_graph.save_graph(self.filename + ".html")
+        log.info("Interactive HTML saved")
                 
 def main():
     # draw example
