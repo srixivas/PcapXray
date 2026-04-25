@@ -4,6 +4,8 @@ import communication_details_fetch
 import json, logging, sys
 from typing import Any
 
+__all__ = ["maliciousTrafficIdentifier"]
+
 log = logging.getLogger(__name__)
 
 # Module to Identify Possible Malicious Traffic

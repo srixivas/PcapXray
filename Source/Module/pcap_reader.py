@@ -1,6 +1,8 @@
 """
 Module pcap_reader
 """
+__all__ = ["PcapEngine"]
+
 import logging
 import sys
 import memory

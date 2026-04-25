@@ -5,6 +5,8 @@ import netaddr
 import logging
 import concurrent.futures
 
+__all__ = ["trafficDetailsFetch"]
+
 log = logging.getLogger(__name__)
 
 _DNS_TIMEOUT = 2.0       # seconds per lookup (socket timeout hint — may be ignored on macOS)

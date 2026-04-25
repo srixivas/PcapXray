@@ -1,5 +1,7 @@
 #File Import
 #import pcap_reader
+__all__ = ["plotLan"]
+
 import communication_details_fetch
 import tor_traffic_handle
 import malicious_traffic_identifier

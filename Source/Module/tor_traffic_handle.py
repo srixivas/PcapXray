@@ -3,6 +3,8 @@ import logging
 import memory
 from stem.descriptor import remote
 
+__all__ = ["torTrafficHandle"]
+
 log = logging.getLogger(__name__)
 
 _TOR_CONSENSUS_TIMEOUT = 15.0  # wall-clock cap for consensus download

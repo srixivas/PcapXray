@@ -2,6 +2,8 @@
 import os, json, logging
 import memory
 
+__all__ = ["reportGen"]
+
 log = logging.getLogger(__name__)
 
 

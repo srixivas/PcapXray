@@ -8,6 +8,8 @@ import logging
 import memory
 from netaddr import *
 
+__all__ = ["fetchDeviceDetails"]
+
 log = logging.getLogger(__name__)
 
 class fetchDeviceDetails:
