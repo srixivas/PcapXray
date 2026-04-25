@@ -119,6 +119,11 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         log.warning("graphviz_layout failed (%s), falling back to spring_layout", exc)
         pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
 
+    # Graphviz returns absolute point coordinates (e.g. x=54, y=36) that matplotlib
+    # renders at those literal positions, pushing nodes into a corner.  Normalize
+    # to a centered [-1.5, 1.5] range so they always fill the figure.
+    pos = _normalize_pos(pos)
+
     # ── Node colours ──────────────────────────────────────────────────────────
     mal_ips = {s.split("/")[0] for s in memory.possible_mal_traffic} | \
               {s.split("/")[1] for s in memory.possible_mal_traffic}
@@ -159,8 +164,10 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
                            ax=ax, alpha=0.85)
 
     _add_legend(ax)
+    ax.margins(0.2)        # 20% padding around the data bounds
     ax.axis("off")
-    fig.tight_layout(pad=0.4)
+    # tight_layout squishes axes when there's a legend; use subplots_adjust instead
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
 
     # ── Expand window and embed panel to the right of ThirdFrame ─────────────
     _original_geometry = base.geometry()
@@ -222,6 +229,24 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
 
     fig.canvas.mpl_connect("button_press_event", _on_click)
     _figure = fig
+
+
+def _normalize_pos(pos: dict) -> dict:
+    """Center and scale graphviz positions to a [-1.5, 1.5] range.
+
+    graphviz_layout returns absolute point coordinates (e.g. x=54, y=36).
+    Without normalization matplotlib renders nodes at those literal positions,
+    which places them in a tiny corner of the figure.
+    """
+    if len(pos) <= 1:
+        return {n: (0.0, 0.0) for n in pos}
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    cx = (max(xs) + min(xs)) / 2
+    cy = (max(ys) + min(ys)) / 2
+    rng = max(max(xs) - min(xs), max(ys) - min(ys)) or 1.0
+    return {n: ((x - cx) / rng * 1.5, (y - cy) / rng * 1.5)
+            for n, (x, y) in pos.items()}
 
 
 def _mac_label(mac: str) -> str:
