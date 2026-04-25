@@ -1,246 +1,189 @@
-import sys
-
-# Tkinter Mac Setting
-if sys.platform == 'darwin':
-    import matplotlib
-    matplotlib.use('TkAgg')
-
-interactive_graph_support = False
-try:
-    from cefpython3 import cefpython as cef
-    interactive_graph_support = True
-except Exception:
-    print("Interactive graph in app wont work as python version/platform is not supported (will launch in default browser)")
-    pass
+"""
+Interactive network graph — embedded Tkinter window using matplotlib + networkx.
+Replaces the defunct cefpython3 CEF implementation.
+"""
+import logging
+import tkinter as tk
+from tkinter import ttk
 
 import memory
 
-# This implementation is a modified version of the example of 
-# embedding CEF Python browser using Tkinter toolkit.
-# Reference https://github.com/cztomczak/cefpython/blob/master/examples/tkinter_.py
-#
-# NOTE: This example often crashes on Mac (Python 2.7, Tk 8.5/8.6)
-#       during initial app loading with such message:
-#       "Segmentation fault: 11". Reported as Issue #309.
-#
-# Tested configurations:
-# - Tk 8.5 on Windows/Mac
-# - Tk 8.6 on Linux
-# - CEF Python v55.3+
-#
-# Known issue on Linux: When typing url, mouse must be over url
-# entry widget otherwise keyboard focus is lost (Issue #255
-# and Issue #284).
+__all__ = ["gimmick_initialize"]
 
-import ctypes
-try:
-    # for Python2
-    from Tkinter import *
-    #from Tkinter import Tkversion
-    import Tkinter as tk
-    import ttk
-    import Tkconstants
-except ImportError:
-    # for Python3
-    from tkinter import *
-    import tkinter as tk
-    from tkinter import ttk
-import sys
-import os
-import platform
-import logging as _logging
+log = logging.getLogger(__name__)
 
-# Platforms
-WINDOWS = (platform.system() == "Windows")
-LINUX = (platform.system() == "Linux")
-MAC = (platform.system() == "Darwin")
+_toplevel: tk.Toplevel | None = None   # singleton — one window at a time
+_figure = None                          # keep matplotlib figure alive
 
-# Globals
-logger = _logging.getLogger("tkinter_.py")
 
-# Constants
-# Tk 8.5 doesn't support png images
-#IMAGE_EXT = ".png" if TkVersion > 8.5 else ".gif"
+def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
+    """Open (or close) the interactive graph window.
 
-interactive_map = ""
-browser_frame = ""
-FourthFrame = ""
-def gimmick_initialize(window, map):
-        global browser_frame, FourthFrame
-        if not browser_frame and not FourthFrame:
-            global interactive_map
-            interactive_map = map
-            logger.setLevel(_logging.INFO)
-            stream_handler = _logging.StreamHandler()
-            formatter = _logging.Formatter("[%(filename)s] %(message)s")
-            stream_handler.setFormatter(formatter)
-            logger.addHandler(stream_handler)
-            if interactive_graph_support:
-                logger.info("CEF Python {ver}".format(ver=cef.__version__))
-                logger.info("Python {ver} {arch}".format(
-                        ver=platform.python_version(), arch=platform.architecture()[0]))
-                logger.info("Tk {ver}".format(ver=tk.Tcl().eval('info patchlevel')))
-                assert cef.__version__ >= "55.3", "CEF Python v55.3+ required to run this"
-                sys.excepthook = cef.ExceptHook  # To shutdown all CEF processes on error
+    Called by user_interface.pcapXrayGui.gimmick(). The html_path arg is
+    kept for API compatibility but is no longer used — we read memory directly.
+    """
+    global _toplevel, _figure
 
-            if not MAC and interactive_graph_support:
-                FourthFrame = ttk.Frame(window,  width=500, height=500, padding="10 10 10 10",relief= GROOVE)
-                FourthFrame.grid(column=50, row=10, sticky=(N, W, E, S), columnspan=200, rowspan=200, padx=5, pady=5)
+    # Toggle: second click closes the window
+    if _toplevel and _toplevel.winfo_exists():
+        _close()
+        return
 
-                browser_frame = BrowserFrame(FourthFrame)
-                browser_frame.grid(row=0, column=0,sticky=(N, W, E, S),columnspan=100, rowspan=100, padx=5, pady=5)
+    try:
+        import networkx as nx
+        import matplotlib
+        matplotlib.use("TkAgg")
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+    except ImportError as exc:
+        log.warning("Interactive graph unavailable — missing dependency: %s", exc)
+        import webbrowser
+        webbrowser.open(_html_path)
+        return
 
-                FourthFrame.columnconfigure(50, weight=1)
-                FourthFrame.rowconfigure(10, weight=1)
-                browser_frame.columnconfigure(0, weight=1)
-                browser_frame.rowconfigure(0, weight=1)
-            else:
-                print("Interative graph with CEF and Tkinter is not supported on MAC. Launching Browser for InteractiveMagic!")
-                FourthFrame = ttk.Frame(window,  width=500, height=500, padding="10 10 10 10",relief= GROOVE)
-                FourthFrame.grid(column=50, row=10, sticky=(N, W, E, S), columnspan=200, rowspan=200, padx=5, pady=5)
-                mac_bug_label = ttk.Label(FourthFrame, text="Interactive Graph will launch on your browser", style="BW.TLabel")
-                mac_bug_label.grid(column=10, row=10,sticky="W")
-                FourthFrame.columnconfigure(50, weight=1)
-                FourthFrame.rowconfigure(10, weight=1)
-                import webbrowser
-                webbrowser.open(interactive_map)
-            window.update()
+    if not memory.packet_db:
+        log.info("Interactive graph: no sessions in memory, nothing to show")
+        return
+
+    # ── Build networkx graph from memory ─────────────────────────────────────
+    G = nx.DiGraph()
+    edge_labels: dict[tuple, str] = {}
+
+    lan_ips = {h.ip for h in memory.lan_hosts.values()}
+
+    for session in memory.packet_db:
+        parts = session.split("/")
+        if len(parts) != 3:
+            continue
+        src_ip, dst_ip, port = parts
+
+        src_label = _node_label(src_ip)
+        dst_label = _node_label(dst_ip)
+
+        is_covert = memory.packet_db[session].covert
+        is_mal = session in memory.possible_mal_traffic
+        is_tor = session in memory.possible_tor_traffic
+
+        G.add_node(src_label, ip=src_ip,
+                   kind="lan" if src_ip in lan_ips else "ext")
+        G.add_node(dst_label, ip=dst_ip,
+                   kind="lan" if dst_ip in lan_ips else "ext")
+        G.add_edge(src_label, dst_label,
+                   port=port, covert=is_covert, mal=is_mal, tor=is_tor)
+        edge_labels[(src_label, dst_label)] = port
+
+    # ── Node colours ──────────────────────────────────────────────────────────
+    mal_ips  = {s.split("/")[1] for s in memory.possible_mal_traffic}
+    tor_ips  = {s.split("/")[1] for s in memory.possible_tor_traffic}
+
+    node_colors = []
+    for node in G.nodes:
+        ip = G.nodes[node].get("ip", "")
+        if ip in tor_ips:
+            node_colors.append("#9c27b0")   # purple — Tor
+        elif ip in mal_ips:
+            node_colors.append("#f44336")   # red — malicious
+        elif G.nodes[node].get("kind") == "lan":
+            node_colors.append("#1e88e5")   # blue — LAN host
         else:
-            if FourthFrame:
-                FourthFrame.grid_forget()
-            FourthFrame, browser_frame = "", ""
-            window.update()
+            node_colors.append("#ff7043")   # orange — external
 
-def show_frame(self, cont):
-    frame = self.frames[cont]
-    frame.tkraise()
+    # ── Matplotlib figure ─────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(11, 8))
+    fig.patch.set_facecolor("#1e1e2e")
+    ax.set_facecolor("#1e1e2e")
 
-class BrowserFrame(tk.Frame):
+    pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
 
-    def __init__(self, master):
-        self.closing = False
-        self.browser = None
-        # Python2 has a ttk frame error of using self as argument so use tk 
-        #ttk.Frame.__init__(self, master, width=500, height=400, padding="10 10 10 10", relief=GROOVE)
-        tk.Frame.__init__(self, master, width=500, height=400)
-        self.bind("<FocusIn>", self.on_focus_in)
-        self.bind("<FocusOut>", self.on_focus_out)
-        self.bind("<Configure>", self.on_configure)
-        self.focus_set()
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors,
+                           node_size=600, alpha=0.92, ax=ax)
+    nx.draw_networkx_labels(G, pos, font_size=6,
+                            font_color="white", ax=ax)
+    nx.draw_networkx_edges(G, pos, edge_color="#607d8b",
+                           arrows=True, arrowsize=12,
+                           connectionstyle="arc3,rad=0.1", ax=ax, alpha=0.7)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
+                                 font_size=5, font_color="#b0bec5", ax=ax)
 
-    def embed_browser(self):
-        window_info = cef.WindowInfo()
-        rect = [0, 0, self.winfo_width(), self.winfo_height()]
-        window_info.SetAsChild(self.get_window_handle(), rect)
-        self.browser = cef.CreateBrowserSync(window_info, url=interactive_map)
-        assert self.browser
-        self.browser.SetClientHandler(LoadHandler(self))
-        self.browser.SetClientHandler(FocusHandler(self))
-        self.message_loop_work()
+    _add_legend(ax)
+    ax.axis("off")
+    fig.tight_layout()
 
-    def get_window_handle(self):
-        if self.winfo_id() > 0 and not MAC:
-            return self.winfo_id()
-        elif MAC:
-            # TODO: Handle MAC case properly the solution below from upstream crashes MAC env
-            """
-            # CEF crashes in mac so temp disable
-            # * CreateBrowserSync calling window handle crashes with segmentation fault 11
-            # * https://github.com/cztomczak/cefpython/issues/309
-            # On Mac window id is an invalid negative value (Issue #308).
-            # This is kind of a dirty hack to get window handle using
-            # PyObjC package. If you change structure of windows then you
-            # need to do modifications here as well.
-            # noinspection PyUnresolvedReferences
-            
-            try:
-                from AppKit import NSApp
-                # noinspection PyUnresolvedReferences
-                import objc
-                # Sometimes there is more than one window, when application
-                # didn't close cleanly last time Python displays an NSAlert
-                # window asking whether to Reopen that window.
-                # noinspection PyUnresolvedReferences
-                return objc.pyobjc_id(NSApp.windows()[-1].contentView())
-            except Exception:
-                raise Exception("Couldn't obtain window handle")
-            """
-            print("Mac environment: Couldn't obtain window handle")
-            # TODO: remove this once the mac issue for CEF is resolved
-            import webbrowser
-            webbrowser.open(interactive_map)
-        else:
-            raise Exception("Couldn't obtain window handle")
+    # ── Toplevel window ───────────────────────────────────────────────────────
+    _toplevel = tk.Toplevel(window)
+    _toplevel.title("Interactive Network Graph")
+    _toplevel.geometry("1000x750")
+    _toplevel.protocol("WM_DELETE_WINDOW", _close)
 
-    def message_loop_work(self):
-        cef.MessageLoopWork()
-        self.after(10, self.message_loop_work)
+    # Toolbar + canvas
+    canvas = FigureCanvasTkAgg(fig, master=_toplevel)
+    toolbar = NavigationToolbar2Tk(canvas, _toplevel, pack_toolbar=False)
+    toolbar.update()
+    toolbar.pack(side=tk.TOP, fill=tk.X)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    canvas.draw()
 
-    def on_configure(self, _):
-        if not self.browser:
-            self.embed_browser()
+    # Info bar at bottom
+    info_var = tk.StringVar(value="Click a node for session details  |  "
+                                  "Blue=LAN  Orange=External  Red=Malicious  Purple=Tor")
+    info_bar = ttk.Label(_toplevel, textvariable=info_var,
+                         anchor="w", padding=(8, 4))
+    info_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    def on_root_configure(self):
-        # Root <Configure> event will be called when top window is moved
-        if self.browser:
-            self.browser.NotifyMoveOrResizeStarted()
+    # Click-to-inspect
+    def _on_click(event):
+        if event.inaxes != ax or event.xdata is None:
+            return
+        closest, min_dist = None, float("inf")
+        for node, (x, y) in pos.items():
+            d = (event.xdata - x) ** 2 + (event.ydata - y) ** 2
+            if d < min_dist:
+                min_dist, closest = d, node
+        if closest is None or min_dist > 0.1:
+            return
+        ip = G.nodes[closest].get("ip", "?")
+        sessions = [s for s in memory.packet_db if ip in s.split("/")[:2]]
+        dst_host = memory.destination_hosts.get(ip)
+        domain = dst_host.domain_name if dst_host and dst_host.domain_name else "—"
+        info_var.set(
+            f"Node: {closest}  |  IP: {ip}  |  Domain: {domain}  |  Sessions: {len(sessions)}"
+        )
 
-    def on_mainframe_configure(self, width, height):
-        if self.browser:
-            if WINDOWS:
-                ctypes.windll.user32.SetWindowPos(
-                    self.browser.GetWindowHandle(), 0,
-                    0, 0, width, height, 0x0002)
-            elif LINUX:
-                self.browser.SetBounds(0, 0, width, height)
-            self.browser.NotifyMoveOrResizeStarted()
+    fig.canvas.mpl_connect("button_press_event", _on_click)
 
-    def on_focus_in(self, _):
-        logger.debug("BrowserFrame.on_focus_in")
-        if self.browser:
-            self.browser.SetFocus(True)
-
-    def on_focus_out(self, _):
-        logger.debug("BrowserFrame.on_focus_out")
-        if self.browser:
-            self.browser.SetFocus(False)
-
-    def on_root_close(self):
-        if self.browser:
-            self.browser.CloseBrowser(True)
-            self.clear_browser_references()
-        self.destroy()
-
-    def clear_browser_references(self):
-        # Clear browser references that you keep anywhere in your
-        # code. All references must be cleared for CEF to shutdown cleanly.
-        self.browser = None
+    _figure = fig
 
 
-class LoadHandler(object):
-
-    def __init__(self, browser_frame):
-        self.browser_frame = browser_frame
-
-class FocusHandler(object):
-
-    def __init__(self, browser_frame):
-        self.browser_frame = browser_frame
-
-    def OnTakeFocus(self, next_component, **_):
-        logger.debug("FocusHandler.OnTakeFocus, next={next}"
-                     .format(next=next_component))
-
-    def OnSetFocus(self, source, **_):
-        logger.debug("FocusHandler.OnSetFocus, source={source}"
-                     .format(source=source))
-        return False
-
-    def OnGotFocus(self, **_):
-        """Fix CEF focus issues (#255). Call browser frame's focus_set
-           to get rid of type cursor in url entry widget."""
-        logger.debug("FocusHandler.OnGotFocus")
-        self.browser_frame.focus_set()
+def _add_legend(ax) -> None:
+    import matplotlib.patches as mpatches
+    legend_items = [
+        mpatches.Patch(color="#1e88e5", label="LAN host"),
+        mpatches.Patch(color="#ff7043", label="External"),
+        mpatches.Patch(color="#f44336", label="Malicious"),
+        mpatches.Patch(color="#9c27b0", label="Tor"),
+    ]
+    ax.legend(handles=legend_items, loc="upper left",
+              facecolor="#2e2e3e", edgecolor="#555", labelcolor="white",
+              fontsize=7)
 
 
+def _node_label(ip: str) -> str:
+    for host in memory.lan_hosts.values():
+        if host.ip == ip:
+            return host.node if host.node else ip
+    if ip in memory.destination_hosts:
+        h = memory.destination_hosts[ip]
+        if h.domain_name and h.domain_name not in ("NotResolvable", ""):
+            return h.domain_name
+    return ip
 
+
+def _close() -> None:
+    global _toplevel, _figure
+    import matplotlib.pyplot as plt
+    if _figure is not None:
+        plt.close(_figure)
+        _figure = None
+    if _toplevel is not None:
+        _toplevel.destroy()
+        _toplevel = None
