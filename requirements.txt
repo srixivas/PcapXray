@@ -23,3 +23,6 @@ pyvis>=0.3.2
 
 # TLS cipher suite parsing
 cryptography>=41.0.0
+
+# Data models with runtime validation
+pydantic>=2.0.0

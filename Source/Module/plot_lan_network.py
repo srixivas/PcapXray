@@ -20,10 +20,9 @@ log = logging.getLogger(__name__)
 
 def _node_label(mac: str) -> str:
     h = memory.lan_hosts[mac]
-    if "node" in h:
-        return h["node"]
-    ip = h.get("ip", mac).replace(":", ".")
-    return ip + "\n" + mac.replace(":", ".")
+    if h.node:
+        return h.node
+    return h.ip.replace(":", ".") + "\n" + mac.replace(":", ".")
 
 class plotLan:
 
@@ -143,28 +142,28 @@ class plotLan:
                         map_dst = dst
                     
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
                     
@@ -190,7 +189,7 @@ class plotLan:
                             #    vis_edges.append(edge)
                             if edge_present == False:
                                 edge_present = True
-                        elif memory.packet_db[session]["covert"]:
+                        elif memory.packet_db[session].covert:
                             if port == "53":
                                 protocol = "DNS"
                             else:
@@ -249,9 +248,9 @@ class plotLan:
                         # This block was just added to handle MAC SPOOF scenario
                         # * Most of the CTF Challenges have fake identical MACs that need to be displayed
                         if map_src in curr_node:
-                            other_node = map_dst + "\n" + memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            other_node = map_dst + "\n" + memory.packet_db[session].Ethernet["dst"].replace(":",".")
                         else:
-                            other_node = map_src + "\n" + memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                            other_node = map_src + "\n" + memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(other_node)
                         interactive_graph.add_node(str(other_node), str(other_node), title=str(other_node), color="yellow")
                         f.edge(curr_node, other_node, label='WeirdTraffic/'+ port ,color="pink")
@@ -280,28 +279,28 @@ class plotLan:
                         map_dst = dst
 
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
                     
@@ -338,28 +337,28 @@ class plotLan:
                         map_dst = dst
 
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
                     
@@ -396,28 +395,28 @@ class plotLan:
                         map_dst = dst
 
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
 
@@ -456,28 +455,28 @@ class plotLan:
                         map_dst = dst
 
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
 
@@ -513,28 +512,28 @@ class plotLan:
                         map_dst = dst
 
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
 
@@ -569,28 +568,28 @@ class plotLan:
                         map_dst = dst
 
                     # Lan Host
-                    if memory.packet_db[session]["Ethernet"]["src"] not in memory.lan_hosts:
-                        curr_node = map_src+"\n"+memory.packet_db[session]["Ethernet"]["src"].replace(":",".")
+                    if memory.packet_db[session].Ethernet["src"] not in memory.lan_hosts:
+                        curr_node = map_src+"\n"+memory.packet_db[session].Ethernet["src"].replace(":",".")
                         f.node(curr_node)
                     else:
-                        curr_node = _node_label(memory.packet_db[session]["Ethernet"]["src"])
+                        curr_node = _node_label(memory.packet_db[session].Ethernet["src"])
                         f.node(curr_node)
 
                     # Destination
                     if dst in memory.destination_hosts:
-                        if memory.destination_hosts[dst]["mac"] in memory.lan_hosts:
-                            destination = _node_label(memory.destination_hosts[dst]["mac"])
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                        if memory.destination_hosts[dst].mac in memory.lan_hosts:
+                            destination = _node_label(memory.destination_hosts[dst].mac)
+                            dlabel = memory.destination_hosts[dst].domain_name
                         else:
-                            destination = memory.destination_hosts[dst]["mac"].replace(":",".")
+                            destination = memory.destination_hosts[dst].mac.replace(":",".")
                             destination += "\n"+"PossibleGateway"
-                            dlabel = memory.destination_hosts[dst].get("domain_name", "")
+                            dlabel = memory.destination_hosts[dst].domain_name
                     else:
-                        if memory.packet_db[session]["Ethernet"]["dst"] in memory.lan_hosts:
-                            destination = _node_label(memory.packet_db[session]["Ethernet"]["dst"])
+                        if memory.packet_db[session].Ethernet["dst"] in memory.lan_hosts:
+                            destination = _node_label(memory.packet_db[session].Ethernet["dst"])
                             dlabel = ""
                         else:
-                            destination = memory.packet_db[session]["Ethernet"]["dst"].replace(":",".")
+                            destination = memory.packet_db[session].Ethernet["dst"].replace(":",".")
                             destination += "\n"+"PossibleGateway"
                             dlabel = ""
 

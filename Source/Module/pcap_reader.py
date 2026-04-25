@@ -4,6 +4,7 @@ Module pcap_reader
 import logging
 import sys
 import memory
+from memory import PacketSession, LanHost, DestinationHost
 
 log = logging.getLogger(__name__)
 import ipaddress
@@ -183,9 +184,9 @@ class PcapEngine():
                             lan_key_src = packet[eth_layer].src
                             lan_key_dst = packet[eth_layer].dst
                             if lan_key_src not in memory.lan_hosts:
-                                memory.lan_hosts[lan_key_src] = {"ip": packet[IP].src}
+                                memory.lan_hosts[lan_key_src] = LanHost(ip=packet[IP].src)
                             if lan_key_dst not in memory.lan_hosts:
-                                memory.lan_hosts[lan_key_dst] = {"ip": packet[IP].dst}
+                                memory.lan_hosts[lan_key_dst] = LanHost(ip=packet[IP].dst)
 
                     elif private_source: # Internetwork packet
 
@@ -197,9 +198,9 @@ class PcapEngine():
                         if eth_layer in packet:
                             lan_key_src = packet[eth_layer].src
                             if lan_key_src not in memory.lan_hosts:
-                                memory.lan_hosts[lan_key_src] = {"ip": packet[IP].src}
+                                memory.lan_hosts[lan_key_src] = LanHost(ip=packet[IP].src)
                             if packet[IP].dst not in memory.destination_hosts:
-                                memory.destination_hosts[packet[IP].dst] = {"mac": packet[eth_layer].dst}
+                                memory.destination_hosts[packet[IP].dst] = DestinationHost(mac=packet[eth_layer].dst)
 
                     elif private_destination: # Internetwork packet
 
@@ -211,10 +212,10 @@ class PcapEngine():
                         if eth_layer in packet:
                             lan_key_dst = packet[eth_layer].dst
                             if lan_key_dst not in memory.lan_hosts:
-                                memory.lan_hosts[lan_key_dst] = {"ip": packet[IP].dst}
+                                memory.lan_hosts[lan_key_dst] = LanHost(ip=packet[IP].dst)
                             if packet[IP].src not in memory.destination_hosts:
-                                memory.destination_hosts[packet[IP].src] = {"mac": packet[eth_layer].src}
-                    
+                                memory.destination_hosts[packet[IP].src] = DestinationHost(mac=packet[eth_layer].src)
+
                     else: # public ip communication if no match
 
                         # <TODO>: Find a better way
@@ -229,13 +230,13 @@ class PcapEngine():
                         else:
                             source_private_ip = key1
 
-                        # IntraNetwork Hosts list 
+                        # IntraNetwork Hosts list
                         # * When both are private they are LAN hosts
                         if eth_layer in packet:
                             if packet[IP].src not in memory.destination_hosts:
-                                memory.destination_hosts[packet[IP].src] = {"mac": packet[eth_layer].src}
+                                memory.destination_hosts[packet[IP].src] = DestinationHost(mac=packet[eth_layer].src)
                             if packet[IP].dst not in memory.destination_hosts:
-                                memory.destination_hosts[packet[IP].dst] = {"mac": packet[eth_layer].dst}
+                                memory.destination_hosts[packet[IP].dst] = DestinationHost(mac=packet[eth_layer].dst)
   
                 elif "ICMP" in packet:
 
@@ -256,31 +257,16 @@ class PcapEngine():
 
                     # Unique session activity
                     if source_private_ip not in memory.packet_db:
-                        memory.packet_db[source_private_ip] = {}
+                        memory.packet_db[source_private_ip] = PacketSession()
 
-                        # Ethernet Layer ( Mac address )
-                        if "Ethernet" not in memory.packet_db[source_private_ip]:
-                            memory.packet_db[source_private_ip]["Ethernet"] = {"src":"", "dst":""}
+                    session = memory.packet_db[source_private_ip]
 
-                        # Record Payloads 
-                        if "Payload" not in memory.packet_db[source_private_ip]:
-                            # Record unidirectional + bidirectional separate
-                            memory.packet_db[source_private_ip]["Payload"] = {"forward":[],"reverse":[]}
-
-                        # Covert Communication Identifier
-                        if "covert" not in memory.packet_db[source_private_ip]:
-                            memory.packet_db[source_private_ip]["covert"] = False
-
-                        # File Signature Identifier
-                        if "file_signatures" not in memory.packet_db[source_private_ip]:
-                            memory.packet_db[source_private_ip]["file_signatures"] = []
-                    
                     # Covert detection and store
                     src, dst, port = source_private_ip.split("/")
-                    if memory.packet_db[source_private_ip]["covert"] == False:
+                    if not session.covert:
                         if not communication_details_fetch.trafficDetailsFetch.is_multicast(src) and not communication_details_fetch.trafficDetailsFetch.is_multicast(dst):
                             if malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(packet) == 1:
-                                memory.packet_db[source_private_ip]["covert"] = True
+                                session.covert = True
                         
                     # Variable to hold payload and detect covert
                     payload_string = ""
@@ -289,74 +275,70 @@ class PcapEngine():
                     # TODO: remove these pcap engine checks (confusing?), this is a temp block to develop/add support
                     # * Once proper building is done this would be removed
                     if self.engine == "pyshark":
-                        
-                        # Ethernet Layer
+
                         # Ethernet layer: store respect mac for the IP
                         if private_source:
                             if "ETH" in packet:
-                                memory.packet_db[source_private_ip]["Ethernet"]["src"] = packet["ETH"].src
-                                memory.packet_db[source_private_ip]["Ethernet"]["dst"] = packet["ETH"].dst
+                                session.Ethernet["src"] = packet["ETH"].src
+                                session.Ethernet["dst"] = packet["ETH"].dst
                             payload = "forward"
                         else:
                             if "ETH" in packet:
-                                memory.packet_db[source_private_ip]["Ethernet"]["src"] = packet["ETH"].dst
-                                memory.packet_db[source_private_ip]["Ethernet"]["dst"] = packet["ETH"].src
+                                session.Ethernet["src"] = packet["ETH"].dst
+                                session.Ethernet["dst"] = packet["ETH"].src
                             payload = "reverse"
 
                         # <TODO>: Payload recording for pyshark
                         # Refer https://github.com/KimiNewt/pyshark/issues/264
                         try:
-                            memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet.get_raw_packet()))
+                            session.Payload[payload].append(str(packet.get_raw_packet()))
                             payload_string = packet.get_raw_packet()
                         except Exception:
-                            memory.packet_db[source_private_ip]["Payload"][payload].append("")
+                            session.Payload[payload].append("")
 
                     elif self.engine == "scapy":
-                        
+
                         # Ethernet layer: store respect mac for the IP
                         if private_source:
                             if "Ether" in packet:
-                                memory.packet_db[source_private_ip]["Ethernet"]["src"] = packet["Ether"].src
-                                memory.packet_db[source_private_ip]["Ethernet"]["dst"] = packet["Ether"].dst
+                                session.Ethernet["src"] = packet["Ether"].src
+                                session.Ethernet["dst"] = packet["Ether"].dst
                             payload = "forward"
                         else:
                             if "Ether" in packet:
-                                memory.packet_db[source_private_ip]["Ethernet"]["src"] = packet["Ether"].dst
-                                memory.packet_db[source_private_ip]["Ethernet"]["dst"] = packet["Ether"].src
+                                session.Ethernet["src"] = packet["Ether"].dst
+                                session.Ethernet["dst"] = packet["Ether"].src
                             payload = "reverse"
-                        
+
                         # Payload
                         if "TCP" in packet:
                             if tls_view_feature:
                                 if "TLS" in packet:
-                                    memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["TLS"].msg))
+                                    session.Payload[payload].append(str(packet["TLS"].msg))
                                 elif "SSLv2" in packet:
-                                    memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["SSLv2"].msg))
+                                    session.Payload[payload].append(str(packet["SSLv2"].msg))
                                 elif "SSLv3" in packet:
-                                    memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["SSLv3"].msg))
+                                    session.Payload[payload].append(str(packet["SSLv3"].msg))
                                 else:
                                     if "_TLSEncryptedContent" in packet["TCP"]: # handle encrypted payload
-                                        memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["TCP"].payload.show(True)))
+                                        session.Payload[payload].append(str(packet["TCP"].payload.show(True)))
                                     else:
-                                        memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["TCP"].payload))
+                                        session.Payload[payload].append(str(packet["TCP"].payload))
                             else:
-                                # TODO: clean this payload dump
-                                memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["TCP"].payload.show(True)))
+                                session.Payload[payload].append(str(packet["TCP"].payload.show(True)))
                             payload_string = packet["TCP"].payload
                         elif "UDP" in packet:
-                            memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["UDP"].payload))
+                            session.Payload[payload].append(str(packet["UDP"].payload))
                             payload_string = packet["UDP"].payload
                         elif "ICMP" in packet:
-                            memory.packet_db[source_private_ip]["Payload"][payload].append(str(packet["ICMP"].payload))
+                            session.Payload[payload].append(str(packet["ICMP"].payload))
                             payload_string = packet["ICMP"].payload
-                    
+
                     # Covert file signatures
-                    if payload_string and memory.packet_db[source_private_ip]["covert"] == True:
+                    if payload_string and session.covert:
                         file_signs = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_payload_prediction(payload_string)
-                        #print(file_signs)
                         if file_signs:
-                            memory.packet_db[source_private_ip]["file_signatures"].extend(file_signs)
-                            memory.packet_db[source_private_ip]["file_signatures"] = list(set(memory.packet_db[source_private_ip]["file_signatures"]))
+                            session.file_signatures = list(set(session.file_signatures + file_signs))
 
 #Malicious
 # HTTP Payload Decrypt

@@ -14,7 +14,7 @@ _DNS_TOTAL_TIMEOUT = 10.0  # hard wall-clock cap for the entire batch
 class trafficDetailsFetch():
 
     def __init__(self, option: str) -> None:
-        hosts = [h for h in memory.destination_hosts if "domain_name" not in memory.destination_hosts[h]]
+        hosts = [h for h in memory.destination_hosts if not memory.destination_hosts[h].domain_name]
         log.info("DNS resolution start: %d hosts, option=%s", len(hosts), option)
         resolve = self.whois_info_fetch if option == "whois" else trafficDetailsFetch.dns
         with concurrent.futures.ThreadPoolExecutor(max_workers=_DNS_WORKERS) as pool:
@@ -23,16 +23,16 @@ class trafficDetailsFetch():
 
             for future in not_done:
                 future.cancel()
-                memory.destination_hosts[future_map[future]]["domain_name"] = "NotResolvable"
+                memory.destination_hosts[future_map[future]].domain_name = "NotResolvable"
                 log.debug("DNS timeout: %s", future_map[future])
 
             for future in done:
                 host = future_map[future]
                 try:
-                    memory.destination_hosts[host]["domain_name"] = future.result()
-                    log.debug("Resolved %s → %s", host, memory.destination_hosts[host]["domain_name"])
+                    memory.destination_hosts[host].domain_name = future.result()
+                    log.debug("Resolved %s → %s", host, memory.destination_hosts[host].domain_name)
                 except Exception:
-                    memory.destination_hosts[host]["domain_name"] = "NotResolvable"
+                    memory.destination_hosts[host].domain_name = "NotResolvable"
 
         log.info("DNS resolution complete: %d resolved, %d timed out", len(done), len(not_done))
 

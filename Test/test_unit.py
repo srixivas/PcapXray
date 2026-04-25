@@ -5,6 +5,7 @@ import socket
 from unittest.mock import patch, MagicMock, mock_open
 
 import memory
+from memory import PacketSession, LanHost, DestinationHost
 import communication_details_fetch
 import device_details_fetch
 import malicious_traffic_identifier
@@ -75,21 +76,21 @@ class TestDnsStatic:
 
 class TestTrafficDetailsFetch:
     def test_populates_domain_name_on_success(self):
-        memory.destination_hosts["1.2.3.4"] = {"port": 80}
+        memory.destination_hosts["1.2.3.4"] = DestinationHost()
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    return_value=("resolved.example.com", [], ["1.2.3.4"])):
             communication_details_fetch.trafficDetailsFetch("sock")
-        assert memory.destination_hosts["1.2.3.4"]["domain_name"] == "resolved.example.com"
+        assert memory.destination_hosts["1.2.3.4"].domain_name == "resolved.example.com"
 
     def test_marks_failed_lookup_not_resolvable(self):
-        memory.destination_hosts["5.6.7.8"] = {"port": 443}
+        memory.destination_hosts["5.6.7.8"] = DestinationHost()
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    side_effect=OSError("NXDOMAIN")):
             communication_details_fetch.trafficDetailsFetch("sock")
-        assert memory.destination_hosts["5.6.7.8"]["domain_name"] == "NotResolvable"
+        assert memory.destination_hosts["5.6.7.8"].domain_name == "NotResolvable"
 
     def test_skips_already_resolved_hosts(self):
-        memory.destination_hosts["1.2.3.4"] = {"domain_name": "pre.resolved.com"}
+        memory.destination_hosts["1.2.3.4"] = DestinationHost(domain_name="pre.resolved.com")
         with patch("communication_details_fetch.socket.gethostbyaddr") as mock_dns:
             communication_details_fetch.trafficDetailsFetch("sock")
         mock_dns.assert_not_called()
@@ -146,7 +147,7 @@ class TestOuiViaIeee:
 
 class TestFetchInfo:
     def test_sets_node_key_for_ipv4_host(self):
-        memory.lan_hosts["AA:BB:CC:DD:EE:FF"] = {"ip": "192.168.1.10"}
+        memory.lan_hosts["AA:BB:CC:DD:EE:FF"] = LanHost(ip="192.168.1.10")
         with patch("device_details_fetch.EUI") as mock_eui_cls:
             reg = MagicMock()
             reg.org = "VendorX"
@@ -154,10 +155,10 @@ class TestFetchInfo:
             mock_eui_cls.return_value.oui.registration.return_value = reg
             device_details_fetch.fetchDeviceDetails("ieee").fetch_info()
         host = memory.lan_hosts["AA:BB:CC:DD:EE:FF"]
-        assert "node" in host
-        assert "192.168.1.10" in host["node"]
-        assert "AA.BB.CC.DD.EE.FF" in host["node"]
-        assert "VendorX" in host["node"]
+        assert host.node
+        assert "192.168.1.10" in host.node
+        assert "AA.BB.CC.DD.EE.FF" in host.node
+        assert "VendorX" in host.node
 
 
 # ───────────────────────── malicious_traffic_identifier ─────────────────────────────
@@ -169,15 +170,15 @@ class TestMaliciousTrafficDetection:
         )
 
     def test_unknown_domain_and_low_port_flagged(self):
-        memory.destination_hosts["8.8.8.8"] = {"domain_name": "NotResolvable"}
+        memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="NotResolvable")
         assert self.identifier.malicious_traffic_detection("192.168.1.1", "8.8.8.8", 80) == 1
 
     def test_high_port_flagged(self):
-        memory.destination_hosts["8.8.8.8"] = {"domain_name": "google.com"}
+        memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="google.com")
         assert self.identifier.malicious_traffic_detection("192.168.1.1", "8.8.8.8", 4444) == 1
 
     def test_known_domain_low_port_not_flagged(self):
-        memory.destination_hosts["8.8.8.8"] = {"domain_name": "dns.google"}
+        memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="dns.google")
         assert self.identifier.malicious_traffic_detection("192.168.1.1", "8.8.8.8", 53) == 0
 
     def test_multicast_src_not_flagged(self):
@@ -280,18 +281,18 @@ class TestCovertPayloadPrediction:
 
 class TestMaliciousTrafficIdentifierInit:
     def test_flags_session_with_unknown_domain(self):
-        memory.packet_db["192.168.1.1/8.8.8.8/53"] = {}
-        memory.destination_hosts["8.8.8.8"] = {"domain_name": "NotResolvable"}
+        memory.packet_db["192.168.1.1/8.8.8.8/53"] = PacketSession()
+        memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="NotResolvable")
         malicious_traffic_identifier.maliciousTrafficIdentifier()
         assert "192.168.1.1/8.8.8.8/53" in memory.possible_mal_traffic
 
     def test_skips_multicast_session(self):
-        memory.packet_db["192.168.1.1/224.0.0.1/1234"] = {}
+        memory.packet_db["192.168.1.1/224.0.0.1/1234"] = PacketSession()
         malicious_traffic_identifier.maliciousTrafficIdentifier()
         assert len(memory.possible_mal_traffic) == 0
 
     def test_skips_non_digit_port(self):
-        memory.packet_db["192.168.1.1/8.8.8.8/unknown"] = {}
+        memory.packet_db["192.168.1.1/8.8.8.8/unknown"] = PacketSession()
         malicious_traffic_identifier.maliciousTrafficIdentifier()
         assert len(memory.possible_mal_traffic) == 0
 
@@ -350,10 +351,9 @@ class TestTorTrafficDetection:
 
 class TestReportGenerator:
     def test_packet_details_creates_file(self, tmp_path):
-        memory.packet_db["10.0.0.1/8.8.8.8/53"] = {
-            "Ethernet": "aa:bb:cc / dd:ee:ff",
-            "Payload": {"forward": ["data"], "reverse": []},
-        }
+        memory.packet_db["10.0.0.1/8.8.8.8/53"] = PacketSession(
+            Payload={"forward": ["data"], "reverse": []}
+        )
         gen = report_generator.reportGen(str(tmp_path), "unit")
         gen.packetDetails()
         out = tmp_path / "Report" / "unit_packet_details.txt"
@@ -361,20 +361,19 @@ class TestReportGenerator:
         assert "10.0.0.1/8.8.8.8/53" in out.read_text()
 
     def test_communication_details_creates_file(self, tmp_path):
-        memory.destination_hosts["8.8.8.8"] = {"domain_name": "dns.google", "port": 53}
+        memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="dns.google")
         gen = report_generator.reportGen(str(tmp_path), "unit")
         gen.communicationDetailsReport()
         out = tmp_path / "Report" / "unit_communication_details.txt"
         assert out.exists()
-        content = out.read_text()
-        assert "dns.google" in content
+        assert "dns.google" in out.read_text()
 
     def test_device_details_creates_file(self, tmp_path):
-        memory.lan_hosts["AA:BB:CC:DD:EE:FF"] = {
-            "ip": "192.168.1.5",
-            "device_vendor": "VendorX",
-            "node": "192.168.1.5\nAA.BB.CC.DD.EE.FF\nVendorX",
-        }
+        memory.lan_hosts["AA:BB:CC:DD:EE:FF"] = LanHost(
+            ip="192.168.1.5",
+            device_vendor="VendorX",
+            node="192.168.1.5\nAA.BB.CC.DD.EE.FF\nVendorX",
+        )
         gen = report_generator.reportGen(str(tmp_path), "unit")
         gen.deviceDetailsReport()
         out = tmp_path / "Report" / "unit_device_details.txt"
