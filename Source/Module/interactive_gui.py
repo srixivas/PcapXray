@@ -1,6 +1,6 @@
 """
-Interactive network graph — embedded Tkinter window using matplotlib + networkx.
-Replaces the defunct cefpython3 CEF implementation.
+Interactive network graph — embedded matplotlib+networkx canvas inside ThirdFrame.
+Uses the same graphviz layout engine selection as plot_lan_network.py.
 """
 import logging
 import tkinter as tk
@@ -12,20 +12,23 @@ __all__ = ["gimmick_initialize"]
 
 log = logging.getLogger(__name__)
 
-_toplevel: tk.Toplevel | None = None   # singleton — one window at a time
-_figure = None                          # keep matplotlib figure alive
+_container: tk.Frame | None = None   # singleton container widget
+_figure = None                         # keep matplotlib figure alive
+_restore_fn = None                     # callback to restore PIL canvas on close
 
 
-def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
-    """Open (or close) the interactive graph window.
+def gimmick_initialize(frame: tk.Frame, _html_path: str, restore_fn=None) -> None:
+    """Embed (or close) the interactive graph inside *frame*.
 
-    Called by user_interface.pcapXrayGui.gimmick(). The html_path arg is
-    kept for API compatibility but is no longer used — we read memory directly.
+    Called by user_interface.pcapXrayGui.gimmick().  The html_path arg is
+    kept for API compatibility but is no longer used.  restore_fn, if given,
+    is called when the user closes the interactive view so the caller can
+    restore the PIL canvas.
     """
-    global _toplevel, _figure
+    global _container, _figure, _restore_fn
 
-    # Toggle: second click closes the window
-    if _toplevel and _toplevel.winfo_exists():
+    # Toggle: second call closes the graph and restores the previous view.
+    if _container is not None and _container.winfo_exists():
         _close()
         return
 
@@ -44,6 +47,8 @@ def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
     if not memory.packet_db:
         log.info("Interactive graph: no sessions in memory, nothing to show")
         return
+
+    _restore_fn = restore_fn
 
     # ── Build networkx graph from memory ─────────────────────────────────────
     G = nx.DiGraph()
@@ -73,8 +78,8 @@ def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
         edge_labels[(src_label, dst_label)] = port
 
     # ── Node colours ──────────────────────────────────────────────────────────
-    mal_ips  = {s.split("/")[1] for s in memory.possible_mal_traffic}
-    tor_ips  = {s.split("/")[1] for s in memory.possible_tor_traffic}
+    mal_ips = {s.split("/")[1] for s in memory.possible_mal_traffic}
+    tor_ips = {s.split("/")[1] for s in memory.possible_tor_traffic}
 
     node_colors = []
     for node in G.nodes:
@@ -88,12 +93,25 @@ def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
         else:
             node_colors.append("#ff7043")   # orange — external
 
+    # ── Layout — mirrors plot_lan_network.py engine selection ─────────────────
+    n_lan = len(memory.lan_hosts)
+    if n_lan > 40:
+        prog = "sfdp"
+    elif n_lan > 20:
+        prog = "circo"
+    else:
+        prog = "dot"
+
+    try:
+        pos = nx.nx_pydot.graphviz_layout(G, prog=prog)
+    except Exception as exc:
+        log.warning("graphviz_layout failed (%s), falling back to spring_layout", exc)
+        pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
+
     # ── Matplotlib figure ─────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(11, 8))
+    fig, ax = plt.subplots(figsize=(11, 7))
     fig.patch.set_facecolor("#1e1e2e")
     ax.set_facecolor("#1e1e2e")
-
-    pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
 
     nx.draw_networkx_nodes(G, pos, node_color=node_colors,
                            node_size=600, alpha=0.92, ax=ax)
@@ -109,26 +127,32 @@ def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
     ax.axis("off")
     fig.tight_layout()
 
-    # ── Toplevel window ───────────────────────────────────────────────────────
-    _toplevel = tk.Toplevel(window)
-    _toplevel.title("Interactive Network Graph")
-    _toplevel.geometry("1000x750")
-    _toplevel.protocol("WM_DELETE_WINDOW", _close)
+    # ── Embed inside the passed frame ─────────────────────────────────────────
+    _container = tk.Frame(frame, bg="#1e1e2e")
+    _container.grid(row=0, column=0, sticky="nsew", columnspan=90)
+    frame.rowconfigure(0, weight=1)
+    frame.columnconfigure(0, weight=1)
 
-    # Toolbar + canvas
-    canvas = FigureCanvasTkAgg(fig, master=_toplevel)
-    toolbar = NavigationToolbar2Tk(canvas, _toplevel, pack_toolbar=False)
-    toolbar.update()
-    toolbar.pack(side=tk.TOP, fill=tk.X)
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    canvas.draw()
+    # Top toolbar row: matplotlib navigation + close button
+    toolbar_row = tk.Frame(_container, bg="#2e2e3e")
+    toolbar_row.pack(side=tk.TOP, fill=tk.X)
 
-    # Info bar at bottom
+    canvas_widget = FigureCanvasTkAgg(fig, master=_container)
+    nav = NavigationToolbar2Tk(canvas_widget, toolbar_row, pack_toolbar=False)
+    nav.update()
+    nav.pack(side=tk.LEFT)
+
+    ttk.Button(toolbar_row, text="Close", command=_close).pack(side=tk.RIGHT, padx=4, pady=2)
+
+    canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    # Info bar at bottom — updated on node click
     info_var = tk.StringVar(value="Click a node for session details  |  "
                                   "Blue=LAN  Orange=External  Red=Malicious  Purple=Tor")
-    info_bar = ttk.Label(_toplevel, textvariable=info_var,
-                         anchor="w", padding=(8, 4))
-    info_bar.pack(side=tk.BOTTOM, fill=tk.X)
+    ttk.Label(_container, textvariable=info_var,
+              anchor="w", padding=(8, 4)).pack(side=tk.BOTTOM, fill=tk.X)
+
+    canvas_widget.draw()
 
     # Click-to-inspect
     def _on_click(event):
@@ -150,7 +174,6 @@ def gimmick_initialize(window: tk.Tk, _html_path: str) -> None:
         )
 
     fig.canvas.mpl_connect("button_press_event", _on_click)
-
     _figure = fig
 
 
@@ -179,11 +202,14 @@ def _node_label(ip: str) -> str:
 
 
 def _close() -> None:
-    global _toplevel, _figure
+    global _container, _figure, _restore_fn
     import matplotlib.pyplot as plt
     if _figure is not None:
         plt.close(_figure)
         _figure = None
-    if _toplevel is not None:
-        _toplevel.destroy()
-        _toplevel = None
+    if _container is not None and _container.winfo_exists():
+        _container.destroy()
+        _container = None
+    if _restore_fn is not None:
+        _restore_fn()
+        _restore_fn = None

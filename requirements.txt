@@ -18,6 +18,7 @@ stem>=1.8.2
 networkx>=3.0
 graphviz>=0.20
 matplotlib>=3.7.0
+pydot>=2.0.0
 
 # Interactive visualization
 pyvis>=0.3.2

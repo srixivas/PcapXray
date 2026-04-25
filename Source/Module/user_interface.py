@@ -276,7 +276,14 @@ class pcapXrayGui:
 
     def gimmick(self):
         import interactive_gui
-        interactive_gui.gimmick_initialize(self.base, "file://"+self.image_file.replace(".png",".html"))
+        if hasattr(self, 'canvas') and self.canvas.winfo_exists():
+            self.canvas.grid_forget()
+        restore = self.load_image if self.img else None
+        interactive_gui.gimmick_initialize(
+            self.ThirdFrame,
+            "file://" + self.image_file.replace(".png", ".html"),
+            restore_fn=restore,
+        )
 
     def load_image(self):
         self.canvas = Canvas(self.ThirdFrame, width=900,height=500, bd=0, bg="navy", xscrollcommand=self.xscrollbar.set, yscrollcommand=self.yscrollbar.set)

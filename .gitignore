@@ -3,6 +3,10 @@ __pycache__/
 .DS_Store
 *.icloud
 
+# Virtual environments
+venv/
+env/
+
 # Test artifacts
 .coverage
 coverage.xml
