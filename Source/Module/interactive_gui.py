@@ -78,16 +78,16 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
                 dst_label = _mac_label(dst_mac)
                 dst_kind = "lan"
             else:
-                short = dst_mac[-8:].replace(":", ".") if dst_mac else dst_ip
-                dst_label = short + "\nGateway"
+                gw_id = dst_mac.replace(":", "")[-6:] if dst_mac else dst_ip[-4:]
+                dst_label = f"GW:{gw_id}"
                 dst_kind = "gw"
         else:
             if eth_dst and eth_dst in memory.lan_hosts:
                 dst_label = _mac_label(eth_dst)
                 dst_kind = "lan"
             else:
-                short = eth_dst[-8:].replace(":", ".") if eth_dst else dst_ip
-                dst_label = short + "\nGateway"
+                gw_id = eth_dst.replace(":", "")[-6:] if eth_dst else dst_ip[-4:]
+                dst_label = f"GW:{gw_id}"
                 dst_kind = "gw"
 
         if src_label == dst_label:
@@ -164,9 +164,18 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
                            ax=ax, alpha=0.85)
 
     _add_legend(ax)
-    ax.margins(0.2)        # 20% padding around the data bounds
     ax.axis("off")
-    # tight_layout squishes axes when there's a legend; use subplots_adjust instead
+
+    # Set axis limits explicitly with a guaranteed minimum extent.
+    # ax.margins() fails when all nodes share the same y (dot layout, 2 nodes):
+    # 20% of a zero y-range is still zero, collapsing the axis to a strip.
+    _xs = [p[0] for p in pos.values()]
+    _ys = [p[1] for p in pos.values()]
+    _xp = max((max(_xs) - min(_xs)) * 0.4, 0.7)
+    _yp = max((max(_ys) - min(_ys)) * 0.4, 0.7)
+    ax.set_xlim(min(_xs) - _xp, max(_xs) + _xp)
+    ax.set_ylim(min(_ys) - _yp, max(_ys) + _yp)
+
     fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
 
     # ── Expand window and embed panel to the right of ThirdFrame ─────────────
@@ -230,6 +239,10 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
     fig.canvas.mpl_connect("button_press_event", _on_click)
     _figure = fig
 
+    # FigureCanvasTkAgg creates an NSView that steals focus on macOS.
+    # Restore it to the root window after the canvas finishes drawing.
+    base.after(250, lambda: (base.lift(), base.focus_force()))
+
 
 def _normalize_pos(pos: dict) -> dict:
     """Center and scale graphviz positions to a [-1.5, 1.5] range.
@@ -250,9 +263,8 @@ def _normalize_pos(pos: dict) -> dict:
 
 
 def _mac_label(mac: str) -> str:
-    """Node label for a LAN host — mirrors plot_lan_network._node_label()."""
-    h = memory.lan_hosts[mac]
-    return h.node if h.node else h.ip
+    """Node label for a LAN host — IP only (no newlines, readable at small font)."""
+    return memory.lan_hosts[mac].ip
 
 
 def _edge_attrs(port: str, covert: bool, is_tor: bool, is_mal: bool) -> tuple[str, str]:

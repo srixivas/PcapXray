@@ -329,5 +329,8 @@ class OtherFrame(Toplevel):
 def main():
     base = Tk()
     pcapXrayGui(base)
+    # macOS: grab focus after the window fully renders (avoids needing to
+    # click the title bar before buttons respond)
+    base.after(200, lambda: (base.lift(), base.focus_force()))
     base.mainloop()
 
