@@ -161,8 +161,8 @@ class pcapXrayGui:
             self.to_menu['values'] = self.to_hosts
         else:
             for mac in memory.lan_hosts:
-                self.to_hosts += memory.lan_hosts[mac]["ip"]
-                self.from_hosts += memory.lan_hosts[mac]["ip"]
+                self.to_hosts += memory.lan_hosts[mac].ip
+                self.from_hosts += memory.lan_hosts[mac].ip
             self.from_menu['values'] = self.from_hosts
     """
 
@@ -224,7 +224,7 @@ class pcapXrayGui:
             self.to_hosts += list(memory.destination_hosts.keys())
             for mac in list(memory.lan_hosts.keys()):
                 self.base.update()
-                self.from_hosts.append(memory.lan_hosts[mac]["ip"])
+                self.from_hosts.append(memory.lan_hosts[mac].ip)
             self.to_hosts = list(set(self.to_hosts + self.from_hosts))
             self.to_menu['values'] = self.to_hosts
             self.from_menu['values'] = self.from_hosts
