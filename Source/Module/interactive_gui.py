@@ -1,7 +1,11 @@
 """
-Interactive network graph — side pane embedded inside ThirdFrame (col=1).
-Node/edge model mirrors plot_lan_network.py: MAC-based LAN grouping, gateway collapse.
-One arc per protocol type per node pair (MultiDiGraph).
+Interactive network graph — right-side panel spanning the full window height.
+
+Layout:
+  col 10, rows 10-40  — existing controls + static graph (unchanged)
+  col 11, rows 10-40  — this panel (rowspan covers all left-column rows)
+
+The window extends rightward; the left column is untouched.
 """
 import logging
 import tkinter as tk
@@ -15,19 +19,15 @@ log = logging.getLogger(__name__)
 
 _container: tk.Frame | None = None
 _figure = None
+_base: tk.Tk | None = None
 
 
-def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
-    """Open (or close) the interactive graph pane inside *frame* (ThirdFrame).
-
-    Places a matplotlib canvas at col=1 next to the PIL static-graph canvas
-    at col=0.  No window geometry math — the main window grows naturally when
-    ThirdFrame gets a second column.
-    """
-    global _container, _figure
+def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
+    """Open (or close) the interactive graph panel."""
+    global _container, _figure, _base
 
     if _container is not None and _container.winfo_exists():
-        _close(frame)
+        _close()
         return
 
     try:
@@ -46,7 +46,9 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
         log.info("Interactive graph: no sessions in memory, nothing to show")
         return
 
-    # ── Build MultiDiGraph — one arc per protocol type per node pair ──────────
+    _base = base
+
+    # ── Build graph ───────────────────────────────────────────────────────────
     G = nx.MultiDiGraph()
     seen_edges: set[tuple] = set()
 
@@ -60,29 +62,23 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
         eth_dst = session.Ethernet.get("dst", "")
 
         if eth_src and eth_src in memory.lan_hosts:
-            src_label = _mac_label(eth_src)
-            src_kind = "lan"
+            src_label, src_kind = _mac_label(eth_src), "lan"
         else:
-            src_label = src_ip
-            src_kind = "ext"
+            src_label, src_kind = src_ip, "ext"
 
         if dst_ip in memory.destination_hosts:
             dst_mac = memory.destination_hosts[dst_ip].mac
             if dst_mac in memory.lan_hosts:
-                dst_label = _mac_label(dst_mac)
-                dst_kind = "lan"
+                dst_label, dst_kind = _mac_label(dst_mac), "lan"
             else:
                 gw_id = dst_mac.replace(":", "")[-6:] if dst_mac else dst_ip[-4:]
-                dst_label = f"GW:{gw_id}"
-                dst_kind = "gw"
+                dst_label, dst_kind = f"GW:{gw_id}", "gw"
         else:
             if eth_dst and eth_dst in memory.lan_hosts:
-                dst_label = _mac_label(eth_dst)
-                dst_kind = "lan"
+                dst_label, dst_kind = _mac_label(eth_dst), "lan"
             else:
                 gw_id = eth_dst.replace(":", "")[-6:] if eth_dst else dst_ip[-4:]
-                dst_label = f"GW:{gw_id}"
-                dst_kind = "gw"
+                dst_label, dst_kind = f"GW:{gw_id}", "gw"
 
         if src_label == dst_label:
             continue
@@ -115,7 +111,7 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
 
     pos = _normalize_pos(pos)
 
-    # ── Node colours ──────────────────────────────────────────────────────────
+    # ── Node / edge colours ───────────────────────────────────────────────────
     mal_ips = {s.split("/")[0] for s in memory.possible_mal_traffic} | \
               {s.split("/")[1] for s in memory.possible_mal_traffic}
     tor_ips = {s.split("/")[1] for s in memory.possible_tor_traffic}
@@ -138,7 +134,8 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
     edge_colors = [d.get("color", "#607d8b") for _, _, d in G.edges(data=True)]
 
     # ── Figure ────────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(9, 5))
+    # figsize is the minimum; FigureCanvasTkAgg auto-scales as the pane fills.
+    fig, ax = plt.subplots(figsize=(9, 7))
     fig.patch.set_facecolor("#1e1e2e")
     ax.set_facecolor("#1e1e2e")
 
@@ -152,8 +149,6 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
     _add_legend(ax)
     ax.axis("off")
 
-    # Guarantee minimum extent on both axes — ax.margins() fails when all
-    # nodes share the same y (dot layout, 2 nodes: 20% of 0 is still 0).
     _xs = [p[0] for p in pos.values()]
     _ys = [p[1] for p in pos.values()]
     _xp = max((max(_xs) - min(_xs)) * 0.4, 0.7)
@@ -162,17 +157,21 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
     ax.set_ylim(min(_ys) - _yp, max(_ys) + _yp)
     fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
 
-    # ── Embed as col=1 side pane inside ThirdFrame ────────────────────────────
-    # The main window grows naturally — no geometry arithmetic needed.
-    base = frame.winfo_toplevel()
+    # ── Embed: col=11, spanning all left-column rows (10–40) ─────────────────
+    # Make window expandable so the new column can appear.
     base.resizable(True, True)
+    base.columnconfigure(11, weight=1)
 
-    _container = tk.Frame(frame, bg="#1e1e2e")
-    _container.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
-    frame.columnconfigure(1, weight=1)
+    # rowspan=31 covers rows 10 through 40 inclusive (the left column's extent).
+    # Empty intermediate rows (11-19, 21-29, …) have 0 height, so the panel
+    # fills the same vertical space as the controls + static graph combined.
+    _container = tk.Frame(base, bg="#1e1e2e")
+    _container.grid(row=10, column=11, rowspan=31, sticky="nsew",
+                    padx=(8, 8), pady=(8, 8))
     _container.rowconfigure(1, weight=1)
     _container.columnconfigure(0, weight=1)
 
+    # Toolbar
     toolbar_row = tk.Frame(_container, bg="#2e2e3e")
     toolbar_row.grid(row=0, column=0, sticky="ew")
 
@@ -180,11 +179,12 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
     nav = NavigationToolbar2Tk(canvas_widget, toolbar_row, pack_toolbar=False)
     nav.update()
     nav.pack(side=tk.LEFT)
-    ttk.Button(toolbar_row, text="Close",
-               command=lambda: _close(frame)).pack(side=tk.RIGHT, padx=4, pady=2)
+    ttk.Button(toolbar_row, text="Close", command=_close).pack(
+        side=tk.RIGHT, padx=4, pady=2)
 
     canvas_widget.get_tk_widget().grid(row=1, column=0, sticky="nsew")
 
+    # Info bar
     info_var = tk.StringVar(value="Click a node for details  |  "
                                   "Blue=LAN  Gray=Gateway  Red=Malicious  Purple=Tor")
     ttk.Label(_container, textvariable=info_var, anchor="w",
@@ -217,30 +217,28 @@ def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
     fig.canvas.mpl_connect("button_press_event", _on_click)
     _figure = fig
 
-    # FigureCanvasTkAgg steals focus on macOS — return it to the root window.
     base.after(250, lambda: (base.lift(), base.focus_force()))
 
 
-def _close(frame: tk.Frame | None = None) -> None:
-    global _container, _figure
+def _close() -> None:
+    global _container, _figure, _base
     import matplotlib.pyplot as plt
     if _figure is not None:
         plt.close(_figure)
         _figure = None
     if _container is not None and _container.winfo_exists():
+        b = _container.winfo_toplevel()
         _container.destroy()
         _container = None
-    if frame is not None:
         try:
-            frame.columnconfigure(1, weight=0, minsize=0)
-            base = frame.winfo_toplevel()
-            base.resizable(False, False)
+            b.columnconfigure(11, weight=0, minsize=0)
+            b.resizable(False, False)
         except Exception:
             pass
+    _base = None
 
 
 def _normalize_pos(pos: dict) -> dict:
-    """Center and scale positions to [-1.5, 1.5] to fill the figure."""
     if len(pos) <= 1:
         return {n: (0.0, 0.0) for n in pos}
     xs = [p[0] for p in pos.values()]
