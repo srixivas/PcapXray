@@ -1,6 +1,7 @@
 """
 Interactive network graph — embedded matplotlib+networkx panel to the right of the static map.
 Node/edge model mirrors plot_lan_network.py: MAC-based LAN grouping, gateway collapse.
+One arc per protocol type per node pair (MultiDiGraph), matching the static graph's edge set.
 """
 import logging
 import tkinter as tk
@@ -17,25 +18,12 @@ _figure = None
 _base: tk.Tk | None = None
 _original_geometry: str | None = None
 
-# Edge color priority (higher = more notable, wins when collapsing parallel edges)
-_EDGE_PRIORITY = {
-    "#f44336": 6,   # malicious — red
-    "#9c27b0": 5,   # Tor — purple
-    "#00bcd4": 4,   # covert — cyan
-    "#43a047": 3,   # HTTP — green
-    "#1e88e5": 3,   # HTTPS — blue
-    "#fdd835": 2,   # DNS — yellow
-    "#ff7043": 2,   # ICMP — orange
-    "#607d8b": 1,   # other — gray
-}
+# Width added to the window when the interactive panel is open
+_PANEL_WIDTH = 940
 
 
 def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
-    """Open (or close) the interactive graph panel to the right of the static map.
-
-    Called by user_interface.pcapXrayGui.gimmick().  The html_path arg is kept
-    for API compatibility only.
-    """
+    """Open (or close) the interactive graph panel to the right of the static map."""
     global _container, _figure, _base, _original_geometry
 
     if _container is not None and _container.winfo_exists():
@@ -60,8 +48,11 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
 
     _base = base
 
-    # ── Build graph (same MAC-based node model as plot_lan_network.py) ────────
-    G = nx.DiGraph()
+    # ── Build MultiDiGraph — one arc per protocol type per node pair ──────────
+    # Node model mirrors plot_lan_network.py: MAC-based LAN grouping,
+    # all external destinations collapse to the gateway MAC node.
+    G = nx.MultiDiGraph()
+    seen_edges: set[tuple] = set()   # (src_label, dst_label, color) — dedup parallel arcs
 
     for session_key, session in memory.packet_db.items():
         parts = session_key.split("/")
@@ -72,7 +63,7 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         eth_src = session.Ethernet.get("src", "")
         eth_dst = session.Ethernet.get("dst", "")
 
-        # Source node — LAN side (session key always has private IP as src)
+        # Source (LAN side — session key always has the private IP as src)
         if eth_src and eth_src in memory.lan_hosts:
             src_label = _mac_label(eth_src)
             src_kind = "lan"
@@ -80,23 +71,23 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
             src_label = src_ip
             src_kind = "ext"
 
-        # Destination node — mirror plot_lan_network.py exactly
+        # Destination — mirrors plot_lan_network.py exactly
         if dst_ip in memory.destination_hosts:
             dst_mac = memory.destination_hosts[dst_ip].mac
             if dst_mac in memory.lan_hosts:
                 dst_label = _mac_label(dst_mac)
                 dst_kind = "lan"
             else:
-                short_mac = dst_mac.replace(":", ".")[-11:] if dst_mac else dst_ip
-                dst_label = short_mac + "\nGateway"
+                short = dst_mac[-8:].replace(":", ".") if dst_mac else dst_ip
+                dst_label = short + "\nGateway"
                 dst_kind = "gw"
         else:
             if eth_dst and eth_dst in memory.lan_hosts:
                 dst_label = _mac_label(eth_dst)
                 dst_kind = "lan"
             else:
-                short_mac = eth_dst.replace(":", ".")[-11:] if eth_dst else dst_ip
-                dst_label = short_mac + "\nGateway"
+                short = eth_dst[-8:].replace(":", ".") if eth_dst else dst_ip
+                dst_label = short + "\nGateway"
                 dst_kind = "gw"
 
         if src_label == dst_label:
@@ -104,22 +95,19 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
 
         is_tor = session_key in memory.possible_tor_traffic
         is_mal = session_key in memory.possible_mal_traffic
-        color = _edge_color(port, session.covert, is_tor, is_mal)
+        color, proto = _edge_attrs(port, session.covert, is_tor, is_mal)
+
+        sig = (src_label, dst_label, color)
+        if sig in seen_edges:
+            continue
+        seen_edges.add(sig)
 
         G.add_node(src_label, kind=src_kind, ip=src_ip)
         G.add_node(dst_label, kind=dst_kind, ip=dst_ip)
-
-        # Collapse parallel edges — keep the most notable protocol color
-        if G.has_edge(src_label, dst_label):
-            prev_color = G[src_label][dst_label].get("color", "#607d8b")
-            if _EDGE_PRIORITY.get(color, 0) > _EDGE_PRIORITY.get(prev_color, 0):
-                G[src_label][dst_label]["color"] = color
-                G[src_label][dst_label]["port"] = port
-        else:
-            G.add_edge(src_label, dst_label, color=color, port=port)
+        G.add_edge(src_label, dst_label, color=color, proto=proto)
 
     if not G.nodes:
-        log.info("Interactive graph: graph is empty after filtering")
+        log.info("Interactive graph: nothing to display")
         return
 
     # ── Layout — same engine selection as plot_lan_network.py ─────────────────
@@ -132,17 +120,17 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
 
     # ── Node colours ──────────────────────────────────────────────────────────
-    mal_srcs  = {s.split("/")[0] for s in memory.possible_mal_traffic}
-    mal_dsts  = {s.split("/")[1] for s in memory.possible_mal_traffic}
-    tor_dsts  = {s.split("/")[1] for s in memory.possible_tor_traffic}
+    mal_ips = {s.split("/")[0] for s in memory.possible_mal_traffic} | \
+              {s.split("/")[1] for s in memory.possible_mal_traffic}
+    tor_ips = {s.split("/")[1] for s in memory.possible_tor_traffic}
 
     node_colors = []
     for node in G.nodes:
-        ip = G.nodes[node].get("ip", "")
+        ip   = G.nodes[node].get("ip", "")
         kind = G.nodes[node].get("kind", "")
-        if ip in tor_dsts:
-            node_colors.append("#9c27b0")   # purple — Tor destination
-        elif ip in mal_srcs or ip in mal_dsts:
+        if ip in tor_ips:
+            node_colors.append("#9c27b0")   # purple — Tor
+        elif ip in mal_ips:
             node_colors.append("#f44336")   # red — malicious
         elif kind == "lan":
             node_colors.append("#1e88e5")   # blue — LAN host
@@ -151,9 +139,9 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         else:
             node_colors.append("#ff7043")   # orange — unknown external
 
-    edge_colors = [G[u][v].get("color", "#607d8b") for u, v in G.edges]
-    edge_labels = {(u, v): _port_label(G[u][v].get("port", ""))
-                   for u, v in G.edges}
+    # Edge colours in MultiDiGraph edge order
+    edge_colors = [d.get("color", "#607d8b")
+                   for _, _, d in G.edges(data=True)]
 
     # ── Matplotlib figure ─────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -164,38 +152,48 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
                            node_size=700, alpha=0.92, ax=ax)
     nx.draw_networkx_labels(G, pos, font_size=6,
                             font_color="white", ax=ax)
+    # MultiDiGraph: draw_networkx_edges fans parallel arcs automatically
     nx.draw_networkx_edges(G, pos, edge_color=edge_colors,
                            arrows=True, arrowsize=14,
-                           connectionstyle="arc3,rad=0.08", ax=ax, alpha=0.8)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels,
-                                 font_size=5, font_color="#b0bec5", ax=ax)
+                           connectionstyle="arc3,rad=0.15",
+                           ax=ax, alpha=0.85)
 
     _add_legend(ax)
     ax.axis("off")
-    fig.tight_layout(pad=0.5)
+    fig.tight_layout(pad=0.4)
 
-    # ── Embed to the right of ThirdFrame in base (column=11, row=40) ─────────
+    # ── Expand window and embed panel to the right of ThirdFrame ─────────────
     _original_geometry = base.geometry()
-    base.resizable(True, True)
+    try:
+        wh, ox, oy = _original_geometry.split("+")
+        ow, oh = wh.split("x")
+        base.geometry(f"{int(ow) + _PANEL_WIDTH}x{oh}+{ox}+{oy}")
+    except Exception:
+        log.warning("Could not parse geometry %s", _original_geometry)
 
     _container = tk.Frame(base, bg="#1e1e2e")
     _container.grid(row=40, column=11, sticky="nsew", padx=(6, 6), pady=(0, 6))
+    _container.rowconfigure(1, weight=1)
+    _container.columnconfigure(0, weight=1)
 
+    # Toolbar row
     toolbar_row = tk.Frame(_container, bg="#2e2e3e")
-    toolbar_row.pack(side=tk.TOP, fill=tk.X)
+    toolbar_row.grid(row=0, column=0, sticky="ew")
 
     canvas_widget = FigureCanvasTkAgg(fig, master=_container)
     nav = NavigationToolbar2Tk(canvas_widget, toolbar_row, pack_toolbar=False)
     nav.update()
     nav.pack(side=tk.LEFT)
-    ttk.Button(toolbar_row, text="Close", command=_close).pack(side=tk.RIGHT, padx=4, pady=2)
+    ttk.Button(toolbar_row, text="Close", command=_close).pack(
+        side=tk.RIGHT, padx=4, pady=2)
 
-    canvas_widget.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    canvas_widget.get_tk_widget().grid(row=1, column=0, sticky="nsew")
 
+    # Info bar
     info_var = tk.StringVar(value="Click a node for details  |  "
                                   "Blue=LAN  Gray=Gateway  Red=Malicious  Purple=Tor")
-    ttk.Label(_container, textvariable=info_var,
-              anchor="w", padding=(6, 3)).pack(side=tk.BOTTOM, fill=tk.X)
+    ttk.Label(_container, textvariable=info_var, anchor="w",
+              padding=(6, 3)).grid(row=2, column=0, sticky="ew")
 
     canvas_widget.draw()
 
@@ -214,8 +212,12 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         sessions = [s for s in memory.packet_db if ip in s.split("/")[:2]]
         dst_host = memory.destination_hosts.get(ip)
         domain = dst_host.domain_name if dst_host and dst_host.domain_name else "—"
+        protos = sorted({G[u][v][k].get("proto", "")
+                         for u, v, k in G.edges(keys=True)
+                         if u == closest or v == closest})
         info_var.set(
-            f"Node: {closest}  |  IP: {ip}  |  Domain: {domain}  |  Sessions: {len(sessions)}"
+            f"Node: {closest}  |  IP: {ip}  |  Domain: {domain}  |  "
+            f"Sessions: {len(sessions)}  |  Protocols: {', '.join(protos)}"
         )
 
     fig.canvas.mpl_connect("button_press_event", _on_click)
@@ -225,44 +227,50 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
 def _mac_label(mac: str) -> str:
     """Node label for a LAN host — mirrors plot_lan_network._node_label()."""
     h = memory.lan_hosts[mac]
-    if h.node:
-        return h.node
-    return h.ip
+    return h.node if h.node else h.ip
 
 
-def _edge_color(port: str, covert: bool, is_tor: bool, is_mal: bool) -> str:
+def _edge_attrs(port: str, covert: bool, is_tor: bool, is_mal: bool) -> tuple[str, str]:
+    """Return (hex_color, protocol_name) for an edge."""
     if is_mal:
-        return "#f44336"
+        return "#f44336", "Malicious"
     if is_tor:
-        return "#9c27b0"
+        return "#9c27b0", "Tor"
     if covert:
-        return "#00bcd4"
+        proto = "DNS" if port == "53" else port
+        return "#00bcd4", f"Covert/{proto}"
     if port == "443":
-        return "#1e88e5"
+        return "#1e88e5", "HTTPS"
     if port == "80":
-        return "#43a047"
+        return "#43a047", "HTTP"
     if port == "53":
-        return "#fdd835"
-    if port == "1":      # ICMP type 1 / echo
-        return "#ff7043"
-    return "#607d8b"
-
-
-def _port_label(port: str) -> str:
-    return {"443": "HTTPS", "80": "HTTP", "53": "DNS"}.get(port, port)
+        return "#fdd835", "DNS"
+    if port == "ICMP":
+        return "#ff7043", "ICMP"
+    try:
+        if int(port) in (20, 21, 23, 25, 110, 143, 139, 69, 161, 162, 1521):
+            return "#ce93d8", f"Clear/{port}"
+    except ValueError:
+        pass
+    return "#607d8b", f"Port {port}"
 
 
 def _add_legend(ax) -> None:
     import matplotlib.patches as mpatches
-    legend_items = [
+    from matplotlib.lines import Line2D
+    items = [
         mpatches.Patch(color="#1e88e5", label="LAN host"),
         mpatches.Patch(color="#78909c", label="Gateway"),
         mpatches.Patch(color="#f44336", label="Malicious"),
         mpatches.Patch(color="#9c27b0", label="Tor"),
+        Line2D([0], [0], color="#1e88e5", linewidth=2, label="HTTPS"),
+        Line2D([0], [0], color="#43a047", linewidth=2, label="HTTP"),
+        Line2D([0], [0], color="#fdd835", linewidth=2, label="DNS"),
+        Line2D([0], [0], color="#00bcd4", linewidth=2, label="Covert"),
     ]
-    ax.legend(handles=legend_items, loc="upper left",
+    ax.legend(handles=items, loc="upper left",
               facecolor="#2e2e3e", edgecolor="#555", labelcolor="white",
-              fontsize=7)
+              fontsize=6, ncol=2)
 
 
 def _close() -> None:
@@ -276,6 +284,6 @@ def _close() -> None:
         _container = None
     if _base is not None and _original_geometry is not None:
         _b, _geom = _base, _original_geometry
-        _b.after(50, lambda: (_b.geometry(_geom), _b.resizable(False, False)))
+        _b.after(50, lambda: _b.geometry(_geom))
     _base = None
     _original_geometry = None
