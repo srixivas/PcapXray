@@ -1,7 +1,7 @@
 """
-Interactive network graph — embedded matplotlib+networkx panel to the right of the static map.
+Interactive network graph — side pane embedded inside ThirdFrame (col=1).
 Node/edge model mirrors plot_lan_network.py: MAC-based LAN grouping, gateway collapse.
-One arc per protocol type per node pair (MultiDiGraph), matching the static graph's edge set.
+One arc per protocol type per node pair (MultiDiGraph).
 """
 import logging
 import tkinter as tk
@@ -15,19 +15,19 @@ log = logging.getLogger(__name__)
 
 _container: tk.Frame | None = None
 _figure = None
-_base: tk.Tk | None = None
-_original_geometry: str | None = None
-
-# Width added to the window when the interactive panel is open
-_PANEL_WIDTH = 940
 
 
-def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
-    """Open (or close) the interactive graph panel to the right of the static map."""
-    global _container, _figure, _base, _original_geometry
+def gimmick_initialize(frame: tk.Frame, _html_path: str) -> None:
+    """Open (or close) the interactive graph pane inside *frame* (ThirdFrame).
+
+    Places a matplotlib canvas at col=1 next to the PIL static-graph canvas
+    at col=0.  No window geometry math — the main window grows naturally when
+    ThirdFrame gets a second column.
+    """
+    global _container, _figure
 
     if _container is not None and _container.winfo_exists():
-        _close()
+        _close(frame)
         return
 
     try:
@@ -46,13 +46,9 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         log.info("Interactive graph: no sessions in memory, nothing to show")
         return
 
-    _base = base
-
     # ── Build MultiDiGraph — one arc per protocol type per node pair ──────────
-    # Node model mirrors plot_lan_network.py: MAC-based LAN grouping,
-    # all external destinations collapse to the gateway MAC node.
     G = nx.MultiDiGraph()
-    seen_edges: set[tuple] = set()   # (src_label, dst_label, color) — dedup parallel arcs
+    seen_edges: set[tuple] = set()
 
     for session_key, session in memory.packet_db.items():
         parts = session_key.split("/")
@@ -63,7 +59,6 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         eth_src = session.Ethernet.get("src", "")
         eth_dst = session.Ethernet.get("dst", "")
 
-        # Source (LAN side — session key always has the private IP as src)
         if eth_src and eth_src in memory.lan_hosts:
             src_label = _mac_label(eth_src)
             src_kind = "lan"
@@ -71,7 +66,6 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
             src_label = src_ip
             src_kind = "ext"
 
-        # Destination — mirrors plot_lan_network.py exactly
         if dst_ip in memory.destination_hosts:
             dst_mac = memory.destination_hosts[dst_ip].mac
             if dst_mac in memory.lan_hosts:
@@ -110,7 +104,7 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         log.info("Interactive graph: nothing to display")
         return
 
-    # ── Layout — same engine selection as plot_lan_network.py ─────────────────
+    # ── Layout ────────────────────────────────────────────────────────────────
     n_lan = len(memory.lan_hosts)
     prog = "sfdp" if n_lan > 40 else "circo" if n_lan > 20 else "dot"
     try:
@@ -119,9 +113,6 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         log.warning("graphviz_layout failed (%s), falling back to spring_layout", exc)
         pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
 
-    # Graphviz returns absolute point coordinates (e.g. x=54, y=36) that matplotlib
-    # renders at those literal positions, pushing nodes into a corner.  Normalize
-    # to a centered [-1.5, 1.5] range so they always fill the figure.
     pos = _normalize_pos(pos)
 
     # ── Node colours ──────────────────────────────────────────────────────────
@@ -134,65 +125,54 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         ip   = G.nodes[node].get("ip", "")
         kind = G.nodes[node].get("kind", "")
         if ip in tor_ips:
-            node_colors.append("#9c27b0")   # purple — Tor
+            node_colors.append("#9c27b0")
         elif ip in mal_ips:
-            node_colors.append("#f44336")   # red — malicious
+            node_colors.append("#f44336")
         elif kind == "lan":
-            node_colors.append("#1e88e5")   # blue — LAN host
+            node_colors.append("#1e88e5")
         elif kind == "gw":
-            node_colors.append("#78909c")   # gray — gateway/router
+            node_colors.append("#78909c")
         else:
-            node_colors.append("#ff7043")   # orange — unknown external
+            node_colors.append("#ff7043")
 
-    # Edge colours in MultiDiGraph edge order
-    edge_colors = [d.get("color", "#607d8b")
-                   for _, _, d in G.edges(data=True)]
+    edge_colors = [d.get("color", "#607d8b") for _, _, d in G.edges(data=True)]
 
-    # ── Matplotlib figure ─────────────────────────────────────────────────────
+    # ── Figure ────────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(9, 5))
     fig.patch.set_facecolor("#1e1e2e")
     ax.set_facecolor("#1e1e2e")
 
     nx.draw_networkx_nodes(G, pos, node_color=node_colors,
                            node_size=700, alpha=0.92, ax=ax)
-    nx.draw_networkx_labels(G, pos, font_size=6,
-                            font_color="white", ax=ax)
-    # MultiDiGraph: draw_networkx_edges fans parallel arcs automatically
+    nx.draw_networkx_labels(G, pos, font_size=7, font_color="white", ax=ax)
     nx.draw_networkx_edges(G, pos, edge_color=edge_colors,
                            arrows=True, arrowsize=14,
                            connectionstyle="arc3,rad=0.15",
                            ax=ax, alpha=0.85)
-
     _add_legend(ax)
     ax.axis("off")
 
-    # Set axis limits explicitly with a guaranteed minimum extent.
-    # ax.margins() fails when all nodes share the same y (dot layout, 2 nodes):
-    # 20% of a zero y-range is still zero, collapsing the axis to a strip.
+    # Guarantee minimum extent on both axes — ax.margins() fails when all
+    # nodes share the same y (dot layout, 2 nodes: 20% of 0 is still 0).
     _xs = [p[0] for p in pos.values()]
     _ys = [p[1] for p in pos.values()]
     _xp = max((max(_xs) - min(_xs)) * 0.4, 0.7)
     _yp = max((max(_ys) - min(_ys)) * 0.4, 0.7)
     ax.set_xlim(min(_xs) - _xp, max(_xs) + _xp)
     ax.set_ylim(min(_ys) - _yp, max(_ys) + _yp)
-
     fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
 
-    # ── Expand window and embed panel to the right of ThirdFrame ─────────────
-    _original_geometry = base.geometry()
-    try:
-        wh, ox, oy = _original_geometry.split("+")
-        ow, oh = wh.split("x")
-        base.geometry(f"{int(ow) + _PANEL_WIDTH}x{oh}+{ox}+{oy}")
-    except Exception:
-        log.warning("Could not parse geometry %s", _original_geometry)
+    # ── Embed as col=1 side pane inside ThirdFrame ────────────────────────────
+    # The main window grows naturally — no geometry arithmetic needed.
+    base = frame.winfo_toplevel()
+    base.resizable(True, True)
 
-    _container = tk.Frame(base, bg="#1e1e2e")
-    _container.grid(row=40, column=11, sticky="nsew", padx=(6, 6), pady=(0, 6))
+    _container = tk.Frame(frame, bg="#1e1e2e")
+    _container.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+    frame.columnconfigure(1, weight=1)
     _container.rowconfigure(1, weight=1)
     _container.columnconfigure(0, weight=1)
 
-    # Toolbar row
     toolbar_row = tk.Frame(_container, bg="#2e2e3e")
     toolbar_row.grid(row=0, column=0, sticky="ew")
 
@@ -200,12 +180,11 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
     nav = NavigationToolbar2Tk(canvas_widget, toolbar_row, pack_toolbar=False)
     nav.update()
     nav.pack(side=tk.LEFT)
-    ttk.Button(toolbar_row, text="Close", command=_close).pack(
-        side=tk.RIGHT, padx=4, pady=2)
+    ttk.Button(toolbar_row, text="Close",
+               command=lambda: _close(frame)).pack(side=tk.RIGHT, padx=4, pady=2)
 
     canvas_widget.get_tk_widget().grid(row=1, column=0, sticky="nsew")
 
-    # Info bar
     info_var = tk.StringVar(value="Click a node for details  |  "
                                   "Blue=LAN  Gray=Gateway  Red=Malicious  Purple=Tor")
     ttk.Label(_container, textvariable=info_var, anchor="w",
@@ -213,7 +192,6 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
 
     canvas_widget.draw()
 
-    # Click-to-inspect
     def _on_click(event):
         if event.inaxes != ax or event.xdata is None:
             return
@@ -239,18 +217,30 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
     fig.canvas.mpl_connect("button_press_event", _on_click)
     _figure = fig
 
-    # FigureCanvasTkAgg creates an NSView that steals focus on macOS.
-    # Restore it to the root window after the canvas finishes drawing.
+    # FigureCanvasTkAgg steals focus on macOS — return it to the root window.
     base.after(250, lambda: (base.lift(), base.focus_force()))
 
 
-def _normalize_pos(pos: dict) -> dict:
-    """Center and scale graphviz positions to a [-1.5, 1.5] range.
+def _close(frame: tk.Frame | None = None) -> None:
+    global _container, _figure
+    import matplotlib.pyplot as plt
+    if _figure is not None:
+        plt.close(_figure)
+        _figure = None
+    if _container is not None and _container.winfo_exists():
+        _container.destroy()
+        _container = None
+    if frame is not None:
+        try:
+            frame.columnconfigure(1, weight=0, minsize=0)
+            base = frame.winfo_toplevel()
+            base.resizable(False, False)
+        except Exception:
+            pass
 
-    graphviz_layout returns absolute point coordinates (e.g. x=54, y=36).
-    Without normalization matplotlib renders nodes at those literal positions,
-    which places them in a tiny corner of the figure.
-    """
+
+def _normalize_pos(pos: dict) -> dict:
+    """Center and scale positions to [-1.5, 1.5] to fill the figure."""
     if len(pos) <= 1:
         return {n: (0.0, 0.0) for n in pos}
     xs = [p[0] for p in pos.values()]
@@ -263,19 +253,16 @@ def _normalize_pos(pos: dict) -> dict:
 
 
 def _mac_label(mac: str) -> str:
-    """Node label for a LAN host — IP only (no newlines, readable at small font)."""
     return memory.lan_hosts[mac].ip
 
 
 def _edge_attrs(port: str, covert: bool, is_tor: bool, is_mal: bool) -> tuple[str, str]:
-    """Return (hex_color, protocol_name) for an edge."""
     if is_mal:
         return "#f44336", "Malicious"
     if is_tor:
         return "#9c27b0", "Tor"
     if covert:
-        proto = "DNS" if port == "53" else port
-        return "#00bcd4", f"Covert/{proto}"
+        return "#00bcd4", f"Covert/{'DNS' if port == '53' else port}"
     if port == "443":
         return "#1e88e5", "HTTPS"
     if port == "80":
@@ -308,19 +295,3 @@ def _add_legend(ax) -> None:
     ax.legend(handles=items, loc="upper left",
               facecolor="#2e2e3e", edgecolor="#555", labelcolor="white",
               fontsize=6, ncol=2)
-
-
-def _close() -> None:
-    global _container, _figure, _base, _original_geometry
-    import matplotlib.pyplot as plt
-    if _figure is not None:
-        plt.close(_figure)
-        _figure = None
-    if _container is not None and _container.winfo_exists():
-        _container.destroy()
-        _container = None
-    if _base is not None and _original_geometry is not None:
-        _b, _geom = _base, _original_geometry
-        _b.after(50, lambda: _b.geometry(_geom))
-    _base = None
-    _original_geometry = None
