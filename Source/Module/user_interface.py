@@ -25,7 +25,7 @@ class pcapXrayGui:
     def __init__(self, base):
 
         # TODO: is this req? Start getting tor consensus in the background
-        #threading.Thread(target=tor_traffic_handle.torTrafficHandle().get_consensus_data(), args=()).start()
+        #threading.Thread(target=tor_traffic_handle.TorTrafficHandle().get_consensus_data(), args=()).start()
 
         # Base Frame Configuration
         self.base = base
@@ -211,7 +211,7 @@ class pcapXrayGui:
                 return
 
             log.info("pcap_analyse: read complete, generating packet report")
-            threading.Thread(target=report_generator.reportGen(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
+            threading.Thread(target=report_generator.ReportGenerator(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
 
             self.details_fetch = 0
             self.to_hosts = ["All"]
@@ -244,22 +244,22 @@ class pcapXrayGui:
     def generate_graph(self):
         log.info("generate_graph: option=%s to=%s from=%s", self.option.get(), self.to_ip.get(), self.from_ip.get())
         if self.details_fetch == 0:
-            t, _ = self._run_in_thread(communication_details_fetch.trafficDetailsFetch, "sock")
-            t1, _ = self._run_in_thread(device_details_fetch.fetchDeviceDetails("ieee").fetch_info)
+            t, _ = self._run_in_thread(communication_details_fetch.TrafficDetailsFetch, "sock")
+            t1, _ = self._run_in_thread(device_details_fetch.FetchDeviceDetails("ieee").fetch_info)
             self.progressbar.start()
             self._poll_thread(t)
             self._poll_thread(t1)
             self.progressbar.stop()
 
             self.details_fetch = 1
-            rpt = report_generator.reportGen(self.destination_report.get(), self.filename)
+            rpt = report_generator.ReportGenerator(self.destination_report.get(), self.filename)
             threading.Thread(target=rpt.communicationDetailsReport, daemon=True).start()
             threading.Thread(target=rpt.deviceDetailsReport, daemon=True).start()
 
         options = self.option.get() + "_" + self.to_ip.get().replace(".", "-") + "_" + self.from_ip.get().replace(".", "-")
         self.image_file = os.path.join(self.destination_report.get(), "Report", self.filename + "_" + options + ".png")
         if not os.path.exists(self.image_file):
-            t1, exc_box = self._run_in_thread(plot_lan_network.plotLan, self.filename, self.destination_report.get(), self.option.get(), self.to_ip.get(), self.from_ip.get())
+            t1, exc_box = self._run_in_thread(plot_lan_network.PlotLan, self.filename, self.destination_report.get(), self.option.get(), self.to_ip.get(), self.from_ip.get())
             self.progressbar.start()
             self._poll_thread(t1)
             self.progressbar.stop()

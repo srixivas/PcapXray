@@ -266,8 +266,8 @@ class PcapEngine():
                     # Covert detection and store
                     src, dst, port = source_private_ip.split("/")
                     if not session.covert:
-                        if not communication_details_fetch.trafficDetailsFetch.is_multicast(src) and not communication_details_fetch.trafficDetailsFetch.is_multicast(dst):
-                            if malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(packet) == 1:
+                        if not communication_details_fetch.TrafficDetailsFetch.is_multicast(src) and not communication_details_fetch.TrafficDetailsFetch.is_multicast(dst):
+                            if malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(packet) == 1:
                                 session.covert = True
                         
                     # Variable to hold payload and detect covert
@@ -338,7 +338,7 @@ class PcapEngine():
 
                     # Covert file signatures
                     if payload_string and session.covert:
-                        file_signs = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_payload_prediction(payload_string)
+                        file_signs = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_payload_prediction(payload_string)
                         if file_signs:
                             session.file_signatures = list(set(session.file_signatures + file_signs))
 

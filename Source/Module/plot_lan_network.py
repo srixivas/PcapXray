@@ -1,6 +1,6 @@
 #File Import
 #import pcap_reader
-__all__ = ["plotLan"]
+__all__ = ["PlotLan"]
 
 import communication_details_fetch
 import tor_traffic_handle
@@ -26,7 +26,7 @@ def _node_label(mac: str) -> str:
         return h.node
     return h.ip.replace(":", ".") + "\n" + mac.replace(":", ".")
 
-class plotLan:
+class PlotLan:
 
     def __init__(self, filename, path, option="Tor", to_ip="All", from_ip="All"):
         log.info("plotLan init: option=%s to=%s from=%s", option, to_ip, from_ip)
@@ -65,11 +65,11 @@ class plotLan:
         #device_details_fetch.fetchDeviceDetails("ieee").fetch_info()
         if option == "Malicious" or option == "All":
             log.info("Running malicious traffic identification")
-            self.mal_identify = malicious_traffic_identifier.maliciousTrafficIdentifier()
+            self.mal_identify = malicious_traffic_identifier.MaliciousTrafficIdentifier()
             log.info("Malicious traffic identification done")
         if option == "Tor" or option == "All":
             log.info("Running Tor traffic detection")
-            self.tor_identify = tor_traffic_handle.torTrafficHandle().tor_traffic_detection()
+            self.tor_identify = tor_traffic_handle.TorTrafficHandle().tor_traffic_detection()
             log.info("Tor traffic detection done")
         log.info("Calling draw_graph")
         self.draw_graph(option, to_ip, from_ip)

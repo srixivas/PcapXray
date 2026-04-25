@@ -29,48 +29,48 @@ def reset_memory():
 
 class TestIsMulticast:
     def test_ipv4_multicast_224(self):
-        assert communication_details_fetch.trafficDetailsFetch.is_multicast("224.0.0.1") is True
+        assert communication_details_fetch.TrafficDetailsFetch.is_multicast("224.0.0.1") is True
 
     def test_ipv4_multicast_239(self):
-        assert communication_details_fetch.trafficDetailsFetch.is_multicast("239.255.255.255") is True
+        assert communication_details_fetch.TrafficDetailsFetch.is_multicast("239.255.255.255") is True
 
     def test_ipv4_unicast(self):
-        assert communication_details_fetch.trafficDetailsFetch.is_multicast("192.168.1.1") is False
+        assert communication_details_fetch.TrafficDetailsFetch.is_multicast("192.168.1.1") is False
 
     def test_ipv4_broadcast_treated_as_multicast(self):
         # First octet 255 >= 224, so broadcast is intentionally treated as non-unicast
-        assert communication_details_fetch.trafficDetailsFetch.is_multicast("255.255.255.255") is True
+        assert communication_details_fetch.TrafficDetailsFetch.is_multicast("255.255.255.255") is True
 
     def test_ipv6_multicast(self):
-        assert communication_details_fetch.trafficDetailsFetch.is_multicast("FF0e::1") is True
+        assert communication_details_fetch.TrafficDetailsFetch.is_multicast("FF0e::1") is True
 
     def test_ipv6_unicast(self):
-        assert communication_details_fetch.trafficDetailsFetch.is_multicast("2001:db8::1") is False
+        assert communication_details_fetch.TrafficDetailsFetch.is_multicast("2001:db8::1") is False
 
 
 class TestDnsStatic:
     def test_resolves_hostname(self):
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    return_value=("example.com", [], ["1.2.3.4"])):
-            assert communication_details_fetch.trafficDetailsFetch.dns("1.2.3.4") == "example.com"
+            assert communication_details_fetch.TrafficDetailsFetch.dns("1.2.3.4") == "example.com"
 
     def test_oserror_returns_not_resolvable(self):
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    side_effect=OSError("no route to host")):
-            assert communication_details_fetch.trafficDetailsFetch.dns("1.2.3.4") == "NotResolvable"
+            assert communication_details_fetch.TrafficDetailsFetch.dns("1.2.3.4") == "NotResolvable"
 
     def test_restores_socket_timeout_after_success(self):
         original = socket.getdefaulttimeout()
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    return_value=("host.local", [], [])):
-            communication_details_fetch.trafficDetailsFetch.dns("10.0.0.1")
+            communication_details_fetch.TrafficDetailsFetch.dns("10.0.0.1")
         assert socket.getdefaulttimeout() == original
 
     def test_restores_socket_timeout_after_error(self):
         original = socket.getdefaulttimeout()
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    side_effect=OSError("fail")):
-            communication_details_fetch.trafficDetailsFetch.dns("10.0.0.1")
+            communication_details_fetch.TrafficDetailsFetch.dns("10.0.0.1")
         assert socket.getdefaulttimeout() == original
 
 
@@ -79,20 +79,20 @@ class TestTrafficDetailsFetch:
         memory.destination_hosts["1.2.3.4"] = DestinationHost()
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    return_value=("resolved.example.com", [], ["1.2.3.4"])):
-            communication_details_fetch.trafficDetailsFetch("sock")
+            communication_details_fetch.TrafficDetailsFetch("sock")
         assert memory.destination_hosts["1.2.3.4"].domain_name == "resolved.example.com"
 
     def test_marks_failed_lookup_not_resolvable(self):
         memory.destination_hosts["5.6.7.8"] = DestinationHost()
         with patch("communication_details_fetch.socket.gethostbyaddr",
                    side_effect=OSError("NXDOMAIN")):
-            communication_details_fetch.trafficDetailsFetch("sock")
+            communication_details_fetch.TrafficDetailsFetch("sock")
         assert memory.destination_hosts["5.6.7.8"].domain_name == "NotResolvable"
 
     def test_skips_already_resolved_hosts(self):
         memory.destination_hosts["1.2.3.4"] = DestinationHost(domain_name="pre.resolved.com")
         with patch("communication_details_fetch.socket.gethostbyaddr") as mock_dns:
-            communication_details_fetch.trafficDetailsFetch("sock")
+            communication_details_fetch.TrafficDetailsFetch("sock")
         mock_dns.assert_not_called()
 
 
@@ -108,7 +108,7 @@ class TestOuiViaApi:
         return resp
 
     def test_returns_company_and_address(self):
-        fetcher = device_details_fetch.fetchDeviceDetails("api")
+        fetcher = device_details_fetch.FetchDeviceDetails("api")
         with patch("device_details_fetch.urllib.request.urlopen",
                    return_value=self._make_response("Apple Inc", "Cupertino")):
             vendor, addr = fetcher.oui_identification_via_api("AA:BB:CC:DD:EE:FF")
@@ -116,7 +116,7 @@ class TestOuiViaApi:
         assert addr == "Cupertino"
 
     def test_returns_unknown_on_http_error(self):
-        fetcher = device_details_fetch.fetchDeviceDetails("api")
+        fetcher = device_details_fetch.FetchDeviceDetails("api")
         with patch("device_details_fetch.urllib.request.urlopen",
                    side_effect=Exception("HTTP 503")):
             vendor, addr = fetcher.oui_identification_via_api("AA:BB:CC:DD:EE:FF")
@@ -126,7 +126,7 @@ class TestOuiViaApi:
 
 class TestOuiViaIeee:
     def test_returns_org_and_address(self):
-        fetcher = device_details_fetch.fetchDeviceDetails("ieee")
+        fetcher = device_details_fetch.FetchDeviceDetails("ieee")
         reg = MagicMock()
         reg.org = "Intel Corp"
         reg.address = "Santa Clara, CA"
@@ -138,7 +138,7 @@ class TestOuiViaIeee:
         assert addr == "Santa Clara, CA"
 
     def test_returns_unknown_on_lookup_failure(self):
-        fetcher = device_details_fetch.fetchDeviceDetails("ieee")
+        fetcher = device_details_fetch.FetchDeviceDetails("ieee")
         with patch("device_details_fetch.EUI", side_effect=Exception("bad MAC")):
             vendor, addr = fetcher.oui_identification_via_ieee("ZZ:ZZ:ZZ:ZZ:ZZ:ZZ")
         assert vendor == "Unknown"
@@ -153,7 +153,7 @@ class TestFetchInfo:
             reg.org = "VendorX"
             reg.address = "Addr"
             mock_eui_cls.return_value.oui.registration.return_value = reg
-            device_details_fetch.fetchDeviceDetails("ieee").fetch_info()
+            device_details_fetch.FetchDeviceDetails("ieee").fetch_info()
         host = memory.lan_hosts["AA:BB:CC:DD:EE:FF"]
         assert host.node
         assert "192.168.1.10" in host.node
@@ -166,7 +166,7 @@ class TestFetchInfo:
 class TestMaliciousTrafficDetection:
     def setup_method(self):
         self.identifier = object.__new__(
-            malicious_traffic_identifier.maliciousTrafficIdentifier
+            malicious_traffic_identifier.MaliciousTrafficIdentifier
         )
 
     def test_unknown_domain_and_low_port_flagged(self):
@@ -205,53 +205,53 @@ class FakePacket:
 class TestCovertTrafficDetection:
     def test_icmp_with_tcp_in_icmp(self):
         pkt = FakePacket({"ICMP", "TCP in ICMP"})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
 
     def test_icmp_with_udp_in_icmp(self):
         pkt = FakePacket({"ICMP", "UDP in ICMP"})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
 
     def test_icmp_with_dns(self):
         pkt = FakePacket({"ICMP", "DNS"})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
 
     def test_icmp_with_padding(self):
         pkt = FakePacket({"ICMP", "padding"})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
 
     def test_icmp_with_http_payload(self):
         icmp_layer = MagicMock()
         icmp_layer.payload = "HTTP/1.1 200 OK"
         pkt = FakePacket({"ICMP"}, {"ICMP": icmp_layer})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 1
 
     def test_icmp_clean_returns_zero(self):
         icmp_layer = MagicMock()
         icmp_layer.payload = "data"
         pkt = FakePacket({"ICMP"}, {"ICMP": icmp_layer})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 0
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 0
 
     def test_dns_unresolvable_qname(self):
         dns_layer = MagicMock()
         dns_layer.qd.qname.strip.return_value = b"unresolvable.internal"
         pkt = FakePacket({"DNS"}, {"DNS": dns_layer})
-        with patch("communication_details_fetch.trafficDetailsFetch.dns",
+        with patch("communication_details_fetch.TrafficDetailsFetch.dns",
                    return_value="NotResolvable"):
-            result = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt)
+            result = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt)
         assert result == 1
 
     def test_dns_high_digit_count_in_qname(self):
         dns_layer = MagicMock()
         dns_layer.qd.qname.strip.return_value = b"aabbcc112233445566.example.com"
         pkt = FakePacket({"DNS"}, {"DNS": dns_layer})
-        with patch("communication_details_fetch.trafficDetailsFetch.dns",
+        with patch("communication_details_fetch.TrafficDetailsFetch.dns",
                    return_value="NotResolvable"):
-            result = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt)
+            result = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt)
         assert result == 1
 
     def test_normal_packet_returns_zero(self):
         pkt = FakePacket({"TCP", "IP"})
-        assert malicious_traffic_identifier.maliciousTrafficIdentifier.covert_traffic_detection(pkt) == 0
+        assert malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_traffic_detection(pkt) == 0
 
 
 class TestCovertPayloadPrediction:
@@ -260,22 +260,22 @@ class TestCovertPayloadPrediction:
             "pdf": {"signs": ["0,25504446"]},  # %PDF
         }
         payload = bytes.fromhex("25504446")
-        result = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_payload_prediction(payload)
+        result = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_payload_prediction(payload)
         assert "pdf" in result
 
     def test_empty_payload_returns_empty_list(self):
         memory.signatures = {"pdf": {"signs": ["0,25504446"]}}
-        result = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_payload_prediction(b"")
+        result = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_payload_prediction(b"")
         assert result == []
 
     def test_no_match_returns_empty_list(self):
         memory.signatures = {"pdf": {"signs": ["0,25504446"]}}
-        result = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_payload_prediction(b"\x00\x01\x02")
+        result = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_payload_prediction(b"\x00\x01\x02")
         assert result == []
 
     def test_malformed_sign_entry_skipped(self):
         memory.signatures = {"broken": {"signs": ["noequalssign"]}}
-        result = malicious_traffic_identifier.maliciousTrafficIdentifier.covert_payload_prediction(b"\x00")
+        result = malicious_traffic_identifier.MaliciousTrafficIdentifier.covert_payload_prediction(b"\x00")
         assert result == []
 
 
@@ -283,17 +283,17 @@ class TestMaliciousTrafficIdentifierInit:
     def test_flags_session_with_unknown_domain(self):
         memory.packet_db["192.168.1.1/8.8.8.8/53"] = PacketSession()
         memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="NotResolvable")
-        malicious_traffic_identifier.maliciousTrafficIdentifier()
+        malicious_traffic_identifier.MaliciousTrafficIdentifier()
         assert "192.168.1.1/8.8.8.8/53" in memory.possible_mal_traffic
 
     def test_skips_multicast_session(self):
         memory.packet_db["192.168.1.1/224.0.0.1/1234"] = PacketSession()
-        malicious_traffic_identifier.maliciousTrafficIdentifier()
+        malicious_traffic_identifier.MaliciousTrafficIdentifier()
         assert len(memory.possible_mal_traffic) == 0
 
     def test_skips_non_digit_port(self):
         memory.packet_db["192.168.1.1/8.8.8.8/unknown"] = PacketSession()
-        malicious_traffic_identifier.maliciousTrafficIdentifier()
+        malicious_traffic_identifier.MaliciousTrafficIdentifier()
         assert len(memory.possible_mal_traffic) == 0
 
 
@@ -307,20 +307,20 @@ class TestGetConsensusData:
         mock_consensus = MagicMock()
         mock_consensus.run.return_value = [desc]
         with patch("tor_traffic_handle.remote.get_consensus", return_value=mock_consensus):
-            tor_traffic_handle.torTrafficHandle()
+            tor_traffic_handle.TorTrafficHandle()
         assert ("1.2.3.4", 9001) in memory.tor_nodes
 
     def test_empty_on_consensus_exception(self):
         mock_consensus = MagicMock()
         mock_consensus.run.side_effect = Exception("connection refused")
         with patch("tor_traffic_handle.remote.get_consensus", return_value=mock_consensus):
-            tor_traffic_handle.torTrafficHandle()
+            tor_traffic_handle.TorTrafficHandle()
         assert memory.tor_nodes == []
 
     def test_skips_download_if_nodes_already_loaded(self):
         memory.tor_nodes.append(("5.6.7.8", 9001))
         with patch("tor_traffic_handle.remote.get_consensus") as mock_get:
-            tor_traffic_handle.torTrafficHandle()
+            tor_traffic_handle.TorTrafficHandle()
         mock_get.assert_not_called()
 
 
@@ -328,21 +328,21 @@ class TestTorTrafficDetection:
     def test_matching_session_added(self):
         memory.tor_nodes = [("1.2.3.4", 9001)]
         memory.packet_db["10.0.0.1/1.2.3.4/9001"] = {}
-        tor = object.__new__(tor_traffic_handle.torTrafficHandle)
+        tor = object.__new__(tor_traffic_handle.TorTrafficHandle)
         tor.tor_traffic_detection()
         assert "10.0.0.1/1.2.3.4/9001" in memory.possible_tor_traffic
 
     def test_non_matching_session_not_added(self):
         memory.tor_nodes = [("1.2.3.4", 9001)]
         memory.packet_db["10.0.0.1/5.6.7.8/80"] = {}
-        tor = object.__new__(tor_traffic_handle.torTrafficHandle)
+        tor = object.__new__(tor_traffic_handle.TorTrafficHandle)
         tor.tor_traffic_detection()
         assert len(memory.possible_tor_traffic) == 0
 
     def test_no_detection_when_tor_nodes_empty(self):
         memory.tor_nodes = []
         memory.packet_db["10.0.0.1/1.2.3.4/9001"] = {}
-        tor = object.__new__(tor_traffic_handle.torTrafficHandle)
+        tor = object.__new__(tor_traffic_handle.TorTrafficHandle)
         tor.tor_traffic_detection()
         assert len(memory.possible_tor_traffic) == 0
 
@@ -354,7 +354,7 @@ class TestReportGenerator:
         memory.packet_db["10.0.0.1/8.8.8.8/53"] = PacketSession(
             Payload={"forward": ["data"], "reverse": []}
         )
-        gen = report_generator.reportGen(str(tmp_path), "unit")
+        gen = report_generator.ReportGenerator(str(tmp_path), "unit")
         gen.packetDetails()
         out = tmp_path / "Report" / "unit_packet_details.txt"
         assert out.exists()
@@ -362,7 +362,7 @@ class TestReportGenerator:
 
     def test_communication_details_creates_file(self, tmp_path):
         memory.destination_hosts["8.8.8.8"] = DestinationHost(domain_name="dns.google")
-        gen = report_generator.reportGen(str(tmp_path), "unit")
+        gen = report_generator.ReportGenerator(str(tmp_path), "unit")
         gen.communicationDetailsReport()
         out = tmp_path / "Report" / "unit_communication_details.txt"
         assert out.exists()
@@ -374,13 +374,13 @@ class TestReportGenerator:
             device_vendor="VendorX",
             node="192.168.1.5\nAA.BB.CC.DD.EE.FF\nVendorX",
         )
-        gen = report_generator.reportGen(str(tmp_path), "unit")
+        gen = report_generator.ReportGenerator(str(tmp_path), "unit")
         gen.deviceDetailsReport()
         out = tmp_path / "Report" / "unit_device_details.txt"
         assert out.exists()
         assert "VendorX" in out.read_text()
 
     def test_creates_report_directory_if_missing(self, tmp_path):
-        gen = report_generator.reportGen(str(tmp_path / "nested" / "path"), "unit")
+        gen = report_generator.ReportGenerator(str(tmp_path / "nested" / "path"), "unit")
         gen.packetDetails()
         assert (tmp_path / "nested" / "path" / "Report").is_dir()

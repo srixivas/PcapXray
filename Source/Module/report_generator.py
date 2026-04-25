@@ -2,7 +2,7 @@
 import os, json, logging
 import memory
 
-__all__ = ["reportGen"]
+__all__ = ["ReportGenerator"]
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def _dumps(obj, **kwargs) -> str:
     return json.dumps(obj, cls=_ModelEncoder, **kwargs)
 
 
-class reportGen:
+class ReportGenerator:
 
     def __init__(self, path: str, filename: str) -> None:
         self.directory = os.path.join(path, "Report")

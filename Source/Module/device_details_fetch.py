@@ -8,11 +8,11 @@ import logging
 import memory
 from netaddr import *
 
-__all__ = ["fetchDeviceDetails"]
+__all__ = ["FetchDeviceDetails"]
 
 log = logging.getLogger(__name__)
 
-class fetchDeviceDetails:
+class FetchDeviceDetails:
 
     def __init__(self, option="ieee"):
         """

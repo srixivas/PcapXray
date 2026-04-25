@@ -4,13 +4,13 @@ import communication_details_fetch
 import json, logging, sys
 from typing import Any
 
-__all__ = ["maliciousTrafficIdentifier"]
+__all__ = ["MaliciousTrafficIdentifier"]
 
 log = logging.getLogger(__name__)
 
 # Module to Identify Possible Malicious Traffic
 
-class maliciousTrafficIdentifier:
+class MaliciousTrafficIdentifier:
 
     def __init__(self):
         for session in memory.packet_db:
@@ -21,7 +21,7 @@ class maliciousTrafficIdentifier:
     def malicious_traffic_detection(self, src: str, dst: str, port: int) -> int:
         well_known_ports = [20, 21, 22, 23, 25, 53, 69, 80, 161, 179, 389, 443]
         # Currently whitelist all the ports
-        if not communication_details_fetch.trafficDetailsFetch.is_multicast(src) and not communication_details_fetch.trafficDetailsFetch.is_multicast(dst):
+        if not communication_details_fetch.TrafficDetailsFetch.is_multicast(src) and not communication_details_fetch.TrafficDetailsFetch.is_multicast(dst):
             if (dst in memory.destination_hosts and (not memory.destination_hosts[dst].domain_name or memory.destination_hosts[dst].domain_name == "NotResolvable")) or port > 1024:
                 return 1
         return 0
@@ -37,7 +37,7 @@ class maliciousTrafficIdentifier:
 
         # TODO: this does not handle ipv6 --> so check before calling this function
         #if "IP" in packet:
-        #    if communication_details_fetch.trafficDetailsFetch.is_multicast(packet["IP"].src) or communication_details_fetch.trafficDetailsFetch.is_multicast(packet["IP"].dst):
+        #    if communication_details_fetch.TrafficDetailsFetch.is_multicast(packet["IP"].src) or communication_details_fetch.TrafficDetailsFetch.is_multicast(packet["IP"].dst):
         #        return 0
 
         if "ICMP" in packet:
@@ -49,7 +49,7 @@ class maliciousTrafficIdentifier:
                 return 1
         elif "DNS" in packet:
             try:
-                if communication_details_fetch.trafficDetailsFetch.dns(packet["DNS"].qd.qname.strip()) == "NotResolvable":
+                if communication_details_fetch.TrafficDetailsFetch.dns(packet["DNS"].qd.qname.strip()) == "NotResolvable":
                     return 1
                 elif sum(c.isdigit() for c in str(packet["DNS"].qd.qname).strip()) > 8:
                     return 1

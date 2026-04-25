@@ -5,7 +5,7 @@ import netaddr
 import logging
 import concurrent.futures
 
-__all__ = ["trafficDetailsFetch"]
+__all__ = ["TrafficDetailsFetch"]
 
 log = logging.getLogger(__name__)
 
@@ -13,12 +13,12 @@ _DNS_TIMEOUT = 2.0       # seconds per lookup (socket timeout hint — may be ig
 _DNS_WORKERS = 30        # parallel reverse-DNS threads
 _DNS_TOTAL_TIMEOUT = 10.0  # hard wall-clock cap for the entire batch
 
-class trafficDetailsFetch():
+class TrafficDetailsFetch():
 
     def __init__(self, option: str) -> None:
         hosts = [h for h in memory.destination_hosts if not memory.destination_hosts[h].domain_name]
         log.info("DNS resolution start: %d hosts, option=%s", len(hosts), option)
-        resolve = self.whois_info_fetch if option == "whois" else trafficDetailsFetch.dns
+        resolve = self.whois_info_fetch if option == "whois" else TrafficDetailsFetch.dns
         with concurrent.futures.ThreadPoolExecutor(max_workers=_DNS_WORKERS) as pool:
             future_map = {pool.submit(resolve, h): h for h in hosts}
             done, not_done = concurrent.futures.wait(future_map, timeout=_DNS_TOTAL_TIMEOUT)

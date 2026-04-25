@@ -41,21 +41,21 @@ def test_pcapreader_pyshark_engine(packet_capture_file, engine):
 @pytest.mark.network
 def test_communication_details_fetch():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
-    communication_details_fetch.trafficDetailsFetch("sock")
+    communication_details_fetch.TrafficDetailsFetch("sock")
     if memory.destination_hosts:
         assert True
 
 def test_device_details_fetch():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
-    device_details_fetch.fetchDeviceDetails("ieee").fetch_info()
+    device_details_fetch.FetchDeviceDetails("ieee").fetch_info()
     if memory.lan_hosts:
         assert True
 
 @pytest.mark.network
 def test_malicious_traffic_identifier():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
-    communication_details_fetch.trafficDetailsFetch("sock")
-    malicious_traffic_identifier.maliciousTrafficIdentifier()
+    communication_details_fetch.TrafficDetailsFetch("sock")
+    malicious_traffic_identifier.MaliciousTrafficIdentifier()
     if memory.possible_mal_traffic:
         assert True
 
@@ -64,9 +64,9 @@ def test_report_gen():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / (filename + ".pcap")), "scapy")
     report_dir = str(EXAMPLES_DIR.parent) + "/"
     if memory.packet_db:
-        report_generator.reportGen(report_dir, filename).packetDetails()
-        report_generator.reportGen(report_dir, filename).communicationDetailsReport()
-        report_generator.reportGen(report_dir, filename).deviceDetailsReport()
+        report_generator.ReportGenerator(report_dir, filename).packetDetails()
+        report_generator.ReportGenerator(report_dir, filename).communicationDetailsReport()
+        report_generator.ReportGenerator(report_dir, filename).deviceDetailsReport()
         report_path = EXAMPLES_DIR.parent / "Report"
         if (report_path / "testcommunicationDetailsReport.txt").exists() and \
            (report_path / "testdeviceDetailsReport.txt").exists() and \
@@ -76,14 +76,14 @@ def test_report_gen():
 @pytest.mark.network
 def test_tor_traffic_handle():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
-    tor_traffic_handle.torTrafficHandle().tor_traffic_detection()
+    tor_traffic_handle.TorTrafficHandle().tor_traffic_detection()
     if memory.possible_tor_traffic:
         assert True
 
 @pytest.mark.parametrize("option", ["All", "HTTP", "HTTPS", "DNS", "ICMP", "Malicious", "Tor"])
 def test_plot_lan_network(tmp_path, option):
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
-    plot_lan_network.plotLan("test", str(tmp_path), option=option)
+    plot_lan_network.PlotLan("test", str(tmp_path), option=option)
     png = tmp_path / "Report" / f"test_{option}_All_All.png"
     assert png.exists(), f"Expected graph PNG not found: {png}"
 
