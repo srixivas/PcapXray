@@ -38,6 +38,7 @@ def test_pcapreader_pyshark_engine(packet_capture_file, engine):
             assert True
 """
 
+@pytest.mark.network
 def test_communication_details_fetch():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
     communication_details_fetch.trafficDetailsFetch("sock")
@@ -50,6 +51,7 @@ def test_device_details_fetch():
     if memory.lan_hosts:
         assert True
 
+@pytest.mark.network
 def test_malicious_traffic_identifier():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
     communication_details_fetch.trafficDetailsFetch("sock")
@@ -71,6 +73,7 @@ def test_report_gen():
            (report_path / "testpacketDetailsReport.txt").exists():
             assert True
 
+@pytest.mark.network
 def test_tor_traffic_handle():
     pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
     tor_traffic_handle.torTrafficHandle().tor_traffic_detection()

@@ -38,7 +38,7 @@ jobs:
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Test with coverage
-        run: pytest --cov=Source/Module --cov-report=xml Test/
+        run: pytest -m "not network" --cov=Source/Module --cov-report=xml Test/
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
