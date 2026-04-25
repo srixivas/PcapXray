@@ -67,10 +67,3 @@ class trafficDetailsFetch():
                 return True
         return False
 
-def main():
-    import pcap_reader
-    capture = pcap_reader.PcapEngine('examples/test.pcap', "scapy")
-    details = trafficDetailsFetch("sock")
-    print(memory.destination_hosts)
-
-#main()

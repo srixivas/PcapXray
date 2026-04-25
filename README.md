@@ -150,6 +150,4 @@ python Source/main.py
 * Thanks for all the dependent libraries used
 * Logo created with logomakr.com and www.inkscape.org
 
-[![Analytics](https://ga-beacon.appspot.com/UA-114681129-1/PcapXray/readme)](https://github.com/igrigorik/ga-beacon)
-
 ## ***Just for Security Fun!***

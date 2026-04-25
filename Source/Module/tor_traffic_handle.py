@@ -42,12 +42,3 @@ class torTrafficHandle():
                 if current_session[2].isdigit() and (current_session[1], int(current_session[2])) in memory.tor_nodes:
                     memory.possible_tor_traffic.append(session)
 
-def main():
-    import pcap_reader
-    pcap_reader.PcapEngine('examples/torExample.pcap', "scapy")
-    tor = torTrafficHandle()
-    print(memory.tor_nodes)
-    tor.tor_traffic_detection()
-    print(memory.possible_tor_traffic)
-
-#main()

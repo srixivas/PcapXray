@@ -127,7 +127,6 @@ class plotLan:
             for session in self.sessions:
                 src, dst, port = session.split("/")
 
-                #print(from_ip, to_ip, src, dst)
                 if (src == from_ip and dst == to_ip) or \
                     (from_ip == "All" and to_ip == "All") or \
                         (to_ip == "All" and from_ip == src) or \
@@ -629,14 +628,3 @@ class plotLan:
         interactive_graph.save_graph(self.filename + ".html")
         log.info("Interactive HTML saved")
                 
-def main():
-    # draw example
-    import pcap_reader
-    pcapfile = pcap_reader.PcapEngine('examples/torExample.pcap', "scapy")
-    print("Reading Done....")
-    details = communication_details_fetch.trafficDetailsFetch("sock")
-    import sys
-    print(sys.path[0])
-    network = plotLan("test", sys.path[0])
-
-#main()

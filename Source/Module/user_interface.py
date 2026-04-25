@@ -292,8 +292,7 @@ class pcapXrayGui:
         #self.canvas.columnconfigure(0, weight=1)
 
     def map_select(self, *args):
-        print(self.option.get())
-        print(self.to_ip.get(), self.from_ip.get())
+        log.debug("map_select: option=%s to=%s from=%s", self.option.get(), self.to_ip.get(), self.from_ip.get())
         self.trigger['state'] = 'disabled'
         self.analyze_button['state'] = 'disabled'
         self.ibutton['state'] = 'disabled'
@@ -303,19 +302,19 @@ class pcapXrayGui:
         self.analyze_button['state'] = 'normal'
 
     def zoom_in(self):
-        print("zoomin")
+        log.debug("zoom_in")
         self.zoom[0] += 100
         self.zoom[1] += 100
         if self.img:
              self.load_image()
 
     def zoom_out(self):
-        print("zoomout")
+        log.debug("zoom_out")
         if self.zoom[0] > 900 and self.zoom[1] > 500:
             self.zoom[0] -= 100
             self.zoom[1] -= 100
         else:
-            print("zoomout --> maximum")
+            log.debug("zoom_out: already at minimum size")
         if self.img:
              self.load_image()
 

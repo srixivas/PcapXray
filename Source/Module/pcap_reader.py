@@ -358,42 +358,5 @@ class PcapEngine():
                             memory.packet_db[source_private_ip]["file_signatures"].extend(file_signs)
                             memory.packet_db[source_private_ip]["file_signatures"] = list(set(memory.packet_db[source_private_ip]["file_signatures"]))
 
-    # TODO: Add function memory to store all the memory data in files (DB)
-    # def memory_handle():
-    """
-    - Store the db as json on a file in cache folder (to not repeat read)
-    """
-
-# Local Driver
-def main():
-    """
-    Module Driver
-    """
-    pcapfile = PcapEngine(sys.path[0]+'/examples/biz.pcap', "scapy")
-    print(memory.packet_db.keys())
-    ports = []
-    
-    """
-    for key in memory.packet_db.keys():
-    #    if "192.168.11.4" in key:
-            print(key)
-            print(memory.packet_db[key])
-            ip, port = key.split("/")[0], int(key.split("/")[-1])
-            if ip == "10.187.195.95":
-                ports.append(port)
-    print(sorted(list(set(ports))))
-    print(memory.lan_hosts)
-    print(memory.destination_hosts)
-    """
-    #print(memory.packet_db["TCP 192.168.0.26:64707 > 172.217.12.174:443"].summary())
-    #print(memory.packet_db["TCP 172.217.12.174:443 > 192.168.0.26:64707"].summary())
-    #memory.packet_db.conversations(type="jpg", target="> test.jpg")
-#main()
-
-# Sort payload by time...
-# SSL Packets
-# - Get handshake details?
-#HTTPS
-#Tor
 #Malicious
 # HTTP Payload Decrypt

@@ -40,14 +40,12 @@ class maliciousTrafficIdentifier:
 
         if "ICMP" in packet:
             if "TCP in ICMP" in packet or "UDP in ICMP" in packet or "DNS" in packet:
-                #print(packet.show())
                 return 1
             elif "padding" in packet:
                 return 1
             elif any(x in str(packet["ICMP"].payload) for x in tunnelled_protocols):
                 return 1
         elif "DNS" in packet:
-            #print(packet["DNS"].qd.qname)
             try:
                 if communication_details_fetch.trafficDetailsFetch.dns(packet["DNS"].qd.qname.strip()) == "NotResolvable":
                     return 1
@@ -94,12 +92,5 @@ class maliciousTrafficIdentifier:
             log.warning("covert_payload_prediction: file signature analysis failed", exc_info=True)
             return []
 
-def main():
-    import pcap_reader
-    cap = pcap_reader.PcapEngine('examples/torExample.pcap', "scapy")
-    maliciousTrafficIdentifier()
-    print(memory.possible_mal_traffic)
-
-#main()
 
 

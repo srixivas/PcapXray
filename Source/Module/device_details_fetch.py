@@ -33,7 +33,7 @@ class fetchDeviceDetails:
             memory.lan_hosts[host]["node"] = ip_san+"\n"+mac_san+"\n"+memory.lan_hosts[host]['device_vendor']
 
     def oui_identification_via_api(self, mac: str) -> str:
-        url = "http://macvendors.co/api/" + mac
+        url = "https://macvendors.co/api/" + mac
         api_request = urllib.request.Request(url, headers={'User-Agent':'PcapXray'})
         try:
             apiResponse = urllib.request.urlopen(api_request)
@@ -54,14 +54,3 @@ class fetchDeviceDetails:
             log.warning("OUI lookup via IEEE failed: %s", e)
             return "Unknown", "Unknown"
 
-def main():
-    import pcap_reader
-    filename = "test.pcap"
-    pcap_reader.PcapEngine('examples/test.pcap', "scapy")
-    fetchDeviceDetails("ieee").fetch_info()
-    print(memory.lan_hosts)
-
-#main()
-
-# MAC Oui Identification Module
-# LAN IP and Getway Identification
