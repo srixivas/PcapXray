@@ -20,7 +20,7 @@ class maliciousTrafficIdentifier:
         well_known_ports = [20, 21, 22, 23, 25, 53, 69, 80, 161, 179, 389, 443]
         # Currently whitelist all the ports
         if not communication_details_fetch.trafficDetailsFetch.is_multicast(src) and not communication_details_fetch.trafficDetailsFetch.is_multicast(dst):
-            if (dst in memory.destination_hosts and memory.destination_hosts[dst]["domain_name"] == "NotResolvable") or port > 1024:
+            if (dst in memory.destination_hosts and memory.destination_hosts[dst].get("domain_name", "NotResolvable") == "NotResolvable") or port > 1024:
                 return 1
         return 0
 

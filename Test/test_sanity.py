@@ -10,6 +10,7 @@ import pcap_reader
 import communication_details_fetch
 import device_details_fetch
 import malicious_traffic_identifier
+import plot_lan_network
 import tor_traffic_handle
 import memory
 
@@ -75,3 +76,15 @@ def test_tor_traffic_handle():
     tor_traffic_handle.torTrafficHandle().tor_traffic_detection()
     if memory.possible_tor_traffic:
         assert True
+
+@pytest.mark.parametrize("option", ["All", "HTTP", "HTTPS", "DNS", "ICMP", "Malicious", "Tor"])
+def test_plot_lan_network(tmp_path, option):
+    pcap_reader.PcapEngine(str(EXAMPLES_DIR / "test.pcap"), "scapy")
+    plot_lan_network.plotLan("test", str(tmp_path), option=option)
+    png = tmp_path / "Report" / f"test_{option}_All_All.png"
+    assert png.exists(), f"Expected graph PNG not found: {png}"
+
+# pyshark engine: disabled — FileCapture enters an infinite loop on certain
+# PCAPs under pytest's event loop. Formally dropping pyshark test coverage
+# until the engine is reworked with an explicit timeout/close contract.
+# Tracked as Phase 2-E.
