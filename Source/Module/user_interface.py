@@ -3,6 +3,7 @@ import os
 import time
 import logging
 import threading
+import webbrowser
 
 from tkinter import *
 
@@ -40,8 +41,8 @@ class pcapXrayGui:
         # 1st Frame - Initial Frame
         InitFrame = ttk.Frame(base,  width=50, padding="10 0 0 0",relief= GROOVE)
         InitFrame.grid(column=10, row=10, sticky=(N, W, E, S))
-        InitFrame.columnconfigure(10, weight=1)
-        InitFrame.rowconfigure(10, weight=1)
+        InitFrame.columnconfigure(4, weight=1)
+        InitFrame.rowconfigure(0, weight=1)
 
         # Pcap File Entry
         self.pcap_file = StringVar()
@@ -54,7 +55,7 @@ class pcapXrayGui:
         ttk.Button(InitFrame, text="Browse", command=lambda: self.browse_directory("pcap")).grid(column=2, row=0, padx=10, pady=10,sticky="E")
         self.analyze_button = ttk.Button(InitFrame, text="Analyze!", command=self.pcap_analyse)
         self.analyze_button.grid(column=3, row=0, padx=10, pady=10,sticky="E")
-        self.progressbar.grid(column=4, row=0, padx=10, pady=10, sticky="E")
+        self.progressbar.grid(column=4, row=0, padx=10, pady=10, sticky="EW")
 
         # First Frame with Report Directory
         # Output and Results Frame
@@ -92,12 +93,15 @@ class pcapXrayGui:
         self.options = {'All', 'HTTP', 'HTTPS', 'Tor', 'Malicious', 'ICMP', 'DNS'}
         #self.option.set('Tor')
         ttk.OptionMenu(SecondFrame,self.option,"Select",*self.options).grid(row=10,column=1, padx=10, sticky="W")
-        self.ibutton = ttk.Button(SecondFrame, text="InteractiveMagic!", command=self.gimmick)
+        self.ibutton = ttk.Button(SecondFrame, text="Graph Panel", command=self.gimmick)
         self.ibutton.grid(row=10, column=10, padx=10, sticky="E")
         self.trigger = ttk.Button(SecondFrame, text="Visualize!", command=self.map_select)
         self.trigger.grid(row=10,column=11, sticky="E")
+        self.browser_button = ttk.Button(SecondFrame, text="Interactive Graph", command=self.open_in_browser)
+        self.browser_button.grid(row=10, column=12, padx=10, sticky="E")
         self.trigger['state'] = 'disabled'
         self.ibutton['state'] = 'disabled'
+        self.browser_button['state'] = 'disabled'
 
         self.img = ""
         
@@ -130,12 +134,12 @@ class pcapXrayGui:
         self.yscrollbar = Scrollbar(self.ThirdFrame, orient=VERTICAL)
         self.yscrollbar.grid(row=0, column=100, sticky=N + S)
         self.ThirdFrame.grid(column=10, row=40, sticky=(N, W, E, S))
-        self.ThirdFrame.columnconfigure(10, weight=1)
-        self.ThirdFrame.rowconfigure(40, weight=1)
+        self.ThirdFrame.columnconfigure(0, weight=1)
+        self.ThirdFrame.rowconfigure(0, weight=1)
 
-        base.resizable(False, False) 
-        base.rowconfigure(0, weight=1)
-        base.columnconfigure(0, weight=1)
+        base.resizable(False, False)
+        base.rowconfigure(40, weight=1)
+        base.columnconfigure(10, weight=1)
 
     def browse_directory(self, option):
         if option == "pcap":
@@ -237,6 +241,7 @@ class pcapXrayGui:
     def _re_enable_controls(self) -> None:
         self.trigger['state'] = 'normal'
         self.ibutton['state'] = 'normal'
+        self.browser_button['state'] = 'normal'
         self.to_menu['state'] = 'normal'
         self.from_menu['state'] = 'normal'
         self.analyze_button['state'] = 'normal'
@@ -278,27 +283,48 @@ class pcapXrayGui:
         import interactive_gui
         interactive_gui.gimmick_initialize(self.base, "file://" + self.image_file.replace(".png", ".html"))
 
+    def open_in_browser(self):
+        html_path = self.image_file.replace(".png", ".html")
+        if os.path.exists(html_path):
+            webbrowser.open("file://" + html_path)
+        else:
+            mb.showerror("Error", "Interactive HTML not found. Click Visualize! first.")
+
     def load_image(self):
-        self.canvas = Canvas(self.ThirdFrame, width=900,height=500, bd=0, bg="navy", xscrollcommand=self.xscrollbar.set, yscrollcommand=self.yscrollbar.set)
-        #self.canvas.grid(row=0, column=0, sticky=N + S + E + W)
+        if not hasattr(self, '_canvas_w'):
+            # Expand to graph-viewing size on first load, then lock.
+            self.base.resizable(True, True)
+            self.base.geometry("1100x780")
+            probe = Canvas(self.ThirdFrame, bd=0)
+            probe.grid(column=0, row=0, sticky=(N, W, E, S))
+            self.base.update_idletasks()
+            self._canvas_w = probe.winfo_width() or 900
+            self._canvas_h = probe.winfo_height() or 500
+            self.zoom = [self._canvas_w, self._canvas_h]
+            probe.destroy()
+            self.base.resizable(False, False)
+
+        self.canvas = Canvas(self.ThirdFrame, width=self._canvas_w, height=self._canvas_h,
+                             bd=0, bg="navy",
+                             xscrollcommand=self.xscrollbar.set,
+                             yscrollcommand=self.yscrollbar.set)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
-        #self.canvas.pack(side = RIGHT, fill = BOTH, expand = True)
-        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom), Image.LANCZOS))#.convert('RGB'))
-        self.canvas.create_image(0,0, image=self.img)
+        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom), Image.LANCZOS))
+        self.canvas.create_image(0, 0, image=self.img, anchor=NW)
         self.canvas.config(scrollregion=self.canvas.bbox(ALL))
         self.xscrollbar.config(command=self.canvas.xview)
         self.yscrollbar.config(command=self.canvas.yview)
-        #self.canvas.rowconfigure(0, weight=1)
-        #self.canvas.columnconfigure(0, weight=1)
 
     def map_select(self, *args):
         log.debug("map_select: option=%s to=%s from=%s", self.option.get(), self.to_ip.get(), self.from_ip.get())
         self.trigger['state'] = 'disabled'
         self.analyze_button['state'] = 'disabled'
         self.ibutton['state'] = 'disabled'
+        self.browser_button['state'] = 'disabled'
         self.generate_graph()
         self.trigger['state'] = 'normal'
         self.ibutton['state'] = 'normal'
+        self.browser_button['state'] = 'normal'
         self.analyze_button['state'] = 'normal'
 
     def zoom_in(self):
@@ -310,7 +336,9 @@ class pcapXrayGui:
 
     def zoom_out(self):
         log.debug("zoom_out")
-        if self.zoom[0] > 900 and self.zoom[1] > 500:
+        min_w = getattr(self, '_canvas_w', 900)
+        min_h = getattr(self, '_canvas_h', 500)
+        if self.zoom[0] > min_w and self.zoom[1] > min_h:
             self.zoom[0] -= 100
             self.zoom[1] -= 100
         else:
