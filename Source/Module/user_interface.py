@@ -19,6 +19,7 @@ import communication_details_fetch
 import device_details_fetch
 import report_generator
 import tor_traffic_handle
+import sqlite_store
 import memory
 from PIL import Image, ImageTk
 
@@ -104,6 +105,7 @@ class pcapXrayGui:
         self.browser_button['state'] = 'disabled'
 
         self.img = ""
+        self._store = sqlite_store.SqliteStore()
         
         ## Filters
         self.from_ip = StringVar()
@@ -194,49 +196,69 @@ class pcapXrayGui:
             return
 
         log.info("pcap_analyse: file=%s", self.pcap_file.get())
-        if os.path.exists(self.pcap_file.get()):
+        if not os.path.exists(self.pcap_file.get()):
+            mb.showerror("Error", "File Not Found!")
+            return
 
-            self.trigger['state'] = 'disabled'
-            self.ibutton['state'] = 'disabled'
-            self.to_menu['state'] = 'disabled'
-            self.from_menu['state'] = 'disabled'
-            self.analyze_button['state'] = 'disabled'
+        self.trigger['state'] = 'disabled'
+        self.ibutton['state'] = 'disabled'
+        self.browser_button['state'] = 'disabled'
+        self.to_menu['state'] = 'disabled'
+        self.from_menu['state'] = 'disabled'
+        self.analyze_button['state'] = 'disabled'
 
-            self.progressbar.start()
+        # Derive filename if user typed the path directly instead of using Browse
+        if not self.filename:
+            self.filename = os.path.basename(self.pcap_file.get()).replace(".pcap", "").replace(".pcapng", "")
 
-            packet_read, exc_box = self._run_in_thread(pcap_reader.PcapEngine, self.pcap_file.get(), self.engine.get())
-            self._poll_thread(packet_read)
-            self.progressbar.stop()
-
-            if exc_box:
-                log.error("PCAP analysis failed: %s", exc_box[0])
-                mb.showerror("Analysis Error", f"PCAP analysis failed:\n{exc_box[0]}")
+        # Offer to reload from SQLite cache if this PCAP was analyzed before
+        if self.filename and self._store.has_session(self.filename):
+            if mb.askyesno("Reload Session",
+                           f"Cached analysis found for '{self.filename}'.\n"
+                           "Reload without re-parsing the PCAP?"):
+                log.info("pcap_analyse: reloading session '%s' from cache", self.filename)
+                self.progressbar.start()
+                self._store.load_session(self.filename)
+                self.progressbar.stop()
+                self._populate_filter_menus()
                 self._re_enable_controls()
                 return
 
-            log.info("pcap_analyse: read complete, generating packet report")
-            threading.Thread(target=report_generator.ReportGenerator(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
+        self.progressbar.start()
+        packet_read, exc_box = self._run_in_thread(pcap_reader.PcapEngine, self.pcap_file.get(), self.engine.get())
+        self._poll_thread(packet_read)
+        self.progressbar.stop()
 
-            self.details_fetch = 0
-            self.to_hosts = ["All"]
-            self.from_hosts = ["All"]
-            self.from_menu.set("All")
-            self.to_menu.set("All")
-            self.option.set("All")
-
-            self.progressbar.start()
-            self.to_hosts += list(memory.destination_hosts.keys())
-            for mac in list(memory.lan_hosts.keys()):
-                self.base.update()
-                self.from_hosts.append(memory.lan_hosts[mac].ip)
-            self.to_hosts = list(set(self.to_hosts + self.from_hosts))
-            self.to_menu['values'] = self.to_hosts
-            self.from_menu['values'] = self.from_hosts
-            self.progressbar.stop()
-
+        if exc_box:
+            log.error("PCAP analysis failed: %s", exc_box[0])
+            mb.showerror("Analysis Error", f"PCAP analysis failed:\n{exc_box[0]}")
             self._re_enable_controls()
-        else:
-            mb.showerror("Error", "File Not Found !")
+            return
+
+        log.info("pcap_analyse: read complete, generating packet report")
+        threading.Thread(target=report_generator.ReportGenerator(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
+
+        if self.filename:
+            self._store.save_session(self.filename)
+        self._populate_filter_menus()
+        self._re_enable_controls()
+
+    def _populate_filter_menus(self) -> None:
+        self.details_fetch = 0
+        self.to_hosts = ["All"]
+        self.from_hosts = ["All"]
+        self.from_menu.set("All")
+        self.to_menu.set("All")
+        self.option.set("All")
+        self.progressbar.start()
+        self.to_hosts += list(memory.destination_hosts.keys())
+        for mac in list(memory.lan_hosts.keys()):
+            self.base.update()
+            self.from_hosts.append(memory.lan_hosts[mac].ip)
+        self.to_hosts = list(set(self.to_hosts + self.from_hosts))
+        self.to_menu['values'] = self.to_hosts
+        self.from_menu['values'] = self.from_hosts
+        self.progressbar.stop()
 
     def _re_enable_controls(self) -> None:
         self.trigger['state'] = 'normal'
