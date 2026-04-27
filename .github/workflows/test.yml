@@ -29,8 +29,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest pytest-cov
-          pip install -r requirements.txt
+          pip install tox flake8
 
       - name: Lint
         run: |
@@ -38,7 +37,12 @@ jobs:
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Test with coverage
-        run: pytest -m "not network" --cov=Source/Module --cov-report=xml Test/
+        run: |
+          pyver=$(echo "${{ matrix.python-version }}" | tr -d .)
+          tox -e py${pyver}
+
+      - name: Test all engines
+        run: tox -e all-engines
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
