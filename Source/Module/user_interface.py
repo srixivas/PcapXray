@@ -105,6 +105,7 @@ class pcapXrayGui:
         self.browser_button['state'] = 'disabled'
 
         self.img = ""
+        self._store = sqlite_store.SqliteStore()
         
         ## Filters
         self.from_ip = StringVar()
@@ -206,15 +207,18 @@ class pcapXrayGui:
         self.from_menu['state'] = 'disabled'
         self.analyze_button['state'] = 'disabled'
 
+        # Derive filename if user typed the path directly instead of using Browse
+        if not self.filename:
+            self.filename = os.path.basename(self.pcap_file.get()).replace(".pcap", "").replace(".pcapng", "")
+
         # Offer to reload from SQLite cache if this PCAP was analyzed before
-        store = sqlite_store.SqliteStore()
-        if store.has_session(self.filename):
+        if self.filename and self._store.has_session(self.filename):
             if mb.askyesno("Reload Session",
                            f"Cached analysis found for '{self.filename}'.\n"
                            "Reload without re-parsing the PCAP?"):
                 log.info("pcap_analyse: reloading session '%s' from cache", self.filename)
                 self.progressbar.start()
-                store.load_session(self.filename)
+                self._store.load_session(self.filename)
                 self.progressbar.stop()
                 self._populate_filter_menus()
                 self._re_enable_controls()
@@ -234,7 +238,8 @@ class pcapXrayGui:
         log.info("pcap_analyse: read complete, generating packet report")
         threading.Thread(target=report_generator.ReportGenerator(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
 
-        store.save_session(self.filename)
+        if self.filename:
+            self._store.save_session(self.filename)
         self._populate_filter_menus()
         self._re_enable_controls()
 

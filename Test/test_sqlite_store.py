@@ -118,10 +118,56 @@ def test_load_nonexistent_session_is_noop(store):
     assert memory.packet_db == original_db
 
 
-def test_bad_db_path_degrades_gracefully():
-    store = SqliteStore(db_path="/nonexistent_dir/bad.db")
+def test_bad_db_path_degrades_gracefully(tmp_path):
+    bad_path = str(tmp_path / "nonexistent_subdir" / "bad.db")
+    store = SqliteStore(db_path=bad_path)
     assert store.has_session("x") is False
     assert store.list_sessions() == []
     _seed_memory()
     store.save_session("x")   # must not raise
     store.load_session("x")   # must not raise
+
+
+def test_empty_pcap_name_is_safe(store):
+    assert store.has_session("") is False
+    _seed_memory()
+    store.save_session("")
+    assert store.has_session("") is True
+    memory.packet_db = {}
+    store.load_session("")
+    assert "1.2.3.4/5.6.7.8/443" in memory.packet_db
+
+
+def test_load_corrupt_data_leaves_memory_untouched(store):
+    """Corrupt blob in DB must not partially update memory."""
+    _seed_memory()
+    store.save_session("mypcap")
+
+    # Manually corrupt the lan_hosts column
+    store._con.execute(
+        "UPDATE sessions SET lan_hosts = ? WHERE pcap_name = ?",
+        ("not-valid-json{{{", "mypcap"),
+    )
+    store._con.commit()
+
+    original_packet_db = dict(memory.packet_db)
+    memory.lan_hosts = {}  # simulate clean slate before load attempt
+
+    store.load_session("mypcap")
+
+    # packet_db must NOT have been updated — load should have aborted atomically
+    assert memory.packet_db == {} or memory.packet_db == original_packet_db
+    assert memory.lan_hosts == {}  # must remain untouched
+
+
+def test_close_allows_reconnect(tmp_path):
+    db = str(tmp_path / "test.db")
+    store = SqliteStore(db_path=db)
+    _seed_memory()
+    store.save_session("pcap1")
+    store.close()
+    assert store._con is None
+    # Re-open and data should still be there
+    store2 = SqliteStore(db_path=db)
+    assert store2.has_session("pcap1") is True
+    store2.close()

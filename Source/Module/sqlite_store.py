@@ -100,29 +100,43 @@ class SqliteStore:
                 (pcap_name,),
             )
             row = cur.fetchone()
-            if row is None:
-                log.warning("SqliteStore.load_session: '%s' not found", pcap_name)
-                return
-            memory.packet_db = {
+        except Exception as exc:
+            log.error("SqliteStore.load_session: DB read failed for '%s': %s", pcap_name, exc)
+            return
+
+        if row is None:
+            log.warning("SqliteStore.load_session: '%s' not found", pcap_name)
+            return
+
+        # Parse all blobs before touching memory — avoids partial-load on bad data.
+        try:
+            new_packet_db = {
                 k: PacketSession.model_validate(v)
                 for k, v in json.loads(row[0]).items()
             }
-            memory.lan_hosts = {
+            new_lan_hosts = {
                 k: LanHost.model_validate(v)
                 for k, v in json.loads(row[1]).items()
             }
-            memory.destination_hosts = {
+            new_dest_hosts = {
                 k: DestinationHost.model_validate(v)
                 for k, v in json.loads(row[2]).items()
             }
-            memory.possible_tor_traffic = json.loads(row[3])
-            memory.possible_mal_traffic = json.loads(row[4])
-            log.info(
-                "SqliteStore: loaded session '%s' (%d sessions, %d LAN hosts, %d dest hosts)",
-                pcap_name, len(memory.packet_db), len(memory.lan_hosts), len(memory.destination_hosts),
-            )
+            new_tor = json.loads(row[3])
+            new_mal = json.loads(row[4])
         except Exception as exc:
-            log.error("SqliteStore.load_session: %s", exc)
+            log.error("SqliteStore.load_session: corrupt data for '%s': %s", pcap_name, exc)
+            return
+
+        memory.packet_db = new_packet_db
+        memory.lan_hosts = new_lan_hosts
+        memory.destination_hosts = new_dest_hosts
+        memory.possible_tor_traffic = new_tor
+        memory.possible_mal_traffic = new_mal
+        log.info(
+            "SqliteStore: loaded session '%s' (%d sessions, %d LAN hosts, %d dest hosts)",
+            pcap_name, len(memory.packet_db), len(memory.lan_hosts), len(memory.destination_hosts),
+        )
 
     def list_sessions(self) -> list[str]:
         if self._con is None:
@@ -135,3 +149,12 @@ class SqliteStore:
         except Exception as exc:
             log.warning("SqliteStore.list_sessions: %s", exc)
             return []
+
+    def close(self) -> None:
+        if self._con is not None:
+            try:
+                self._con.close()
+            except Exception as exc:
+                log.warning("SqliteStore.close: %s", exc)
+            finally:
+                self._con = None

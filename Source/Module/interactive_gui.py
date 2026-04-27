@@ -233,8 +233,8 @@ def _close() -> None:
         try:
             b.columnconfigure(11, weight=0, minsize=0)
             b.resizable(False, False)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("_close: could not restore window geometry: %s", exc)
     _base = None
 
 
