@@ -25,10 +25,13 @@ import sqlite_store
 import memory
 from PIL import Image, ImageTk
 
-_SPIN_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
-_SPIN_COLOR  = "#4fc3f7"   # cyan — active
-_DONE_COLOR  = "#81c784"   # green — success
-_ERR_COLOR   = "#e57373"   # red   — error
+_SPIN_FRAMES  = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+_SPIN_TRAIL   = 5            # how many frames to show as a rolling wave
+_SPIN_COLOR   = "#4fc3f7"   # cyan — active
+_DONE_COLOR   = "#81c784"   # green — success
+_ERR_COLOR    = "#e57373"   # red   — error
+_SPIN_FONT    = ("Courier", 13)
+_SPIN_WIDTH   = 38           # fixed character width — prevents layout reflow
 
 
 class pcapXrayGui:
@@ -62,7 +65,7 @@ class pcapXrayGui:
         self.analyze_button = ttk.Button(InitFrame, text="Analyze!", command=self.pcap_analyse)
         self.analyze_button.grid(column=3, row=0, padx=10, pady=10, sticky="E")
         self._spin_label = tk.Label(InitFrame, text="", fg=_SPIN_COLOR,
-                                    font=("Courier", 10), width=26, anchor="w")
+                                    font=_SPIN_FONT, width=_SPIN_WIDTH, anchor="w")
         self._spin_label.grid(column=4, row=0, padx=10, pady=10, sticky="EW")
         self._spin_job: str | None = None
         self._spin_idx = 0
@@ -191,8 +194,12 @@ class pcapXrayGui:
         self._spin_tick()
 
     def _spin_tick(self) -> None:
-        frame = _SPIN_FRAMES[self._spin_idx % len(_SPIN_FRAMES)]
-        self._spin_label.config(text=f"{frame} {self._spin_msg}")
+        n = len(_SPIN_FRAMES)
+        trail = "".join(
+            _SPIN_FRAMES[(self._spin_idx - _SPIN_TRAIL + i) % n]
+            for i in range(_SPIN_TRAIL)
+        )
+        self._spin_label.config(text=f"{trail}  {self._spin_msg}")
         self._spin_idx += 1
         self._spin_job = self.base.after(80, self._spin_tick)
 
