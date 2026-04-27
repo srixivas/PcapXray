@@ -3,6 +3,7 @@
 # PCAP parsing engines
 scapy>=2.5.0
 pyshark>=0.6
+dpkt>=1.9.8
 
 # IP/network utilities
 ipwhois>=1.2.0
