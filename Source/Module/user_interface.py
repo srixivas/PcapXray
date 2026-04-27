@@ -13,6 +13,8 @@ from tkinter import filedialog as fd
 from tkinter import messagebox as mb
 import queue as q
 
+import tkinter as tk
+
 import pcap_reader
 import plot_lan_network
 import communication_details_fetch
@@ -22,6 +24,12 @@ import tor_traffic_handle
 import sqlite_store
 import memory
 from PIL import Image, ImageTk
+
+_SPIN_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+_SPIN_COLOR  = "#4fc3f7"   # cyan — active
+_DONE_COLOR  = "#81c784"   # green — success
+_ERR_COLOR   = "#e57373"   # red   — error
+
 
 class pcapXrayGui:
     def __init__(self, base):
@@ -50,13 +58,15 @@ class pcapXrayGui:
         self.filename = ""
         ttk.Label(InitFrame, text="Enter pcap file path: ",style="BW.TLabel").grid(column=0, row=0, sticky="W")
         self.filename_field = ttk.Entry(InitFrame, width=32, textvariable=self.pcap_file, style="BW.TEntry").grid(column=1, row=0, sticky="W, E")
-        self.progressbar = ttk.Progressbar(InitFrame, orient="horizontal", length=200,value=0, maximum=200,  mode="indeterminate")
-        # Browse button
-        #self.filename = StringVar()
-        ttk.Button(InitFrame, text="Browse", command=lambda: self.browse_directory("pcap")).grid(column=2, row=0, padx=10, pady=10,sticky="E")
+        ttk.Button(InitFrame, text="Browse", command=lambda: self.browse_directory("pcap")).grid(column=2, row=0, padx=10, pady=10, sticky="E")
         self.analyze_button = ttk.Button(InitFrame, text="Analyze!", command=self.pcap_analyse)
-        self.analyze_button.grid(column=3, row=0, padx=10, pady=10,sticky="E")
-        self.progressbar.grid(column=4, row=0, padx=10, pady=10, sticky="EW")
+        self.analyze_button.grid(column=3, row=0, padx=10, pady=10, sticky="E")
+        self._spin_label = tk.Label(InitFrame, text="", fg=_SPIN_COLOR,
+                                    font=("Courier", 10), width=26, anchor="w")
+        self._spin_label.grid(column=4, row=0, padx=10, pady=10, sticky="EW")
+        self._spin_job: str | None = None
+        self._spin_idx = 0
+        self._spin_msg = ""
 
         # First Frame with Report Directory
         # Output and Results Frame
@@ -170,6 +180,29 @@ class pcapXrayGui:
             self.from_menu['values'] = self.from_hosts
     """
 
+    # ------------------------------------------------------------------
+    # Spinner helpers
+    # ------------------------------------------------------------------
+
+    def _spin_start(self, text: str = "Working") -> None:
+        self._spin_msg = text
+        self._spin_idx = 0
+        self._spin_label.config(fg=_SPIN_COLOR)
+        self._spin_tick()
+
+    def _spin_tick(self) -> None:
+        frame = _SPIN_FRAMES[self._spin_idx % len(_SPIN_FRAMES)]
+        self._spin_label.config(text=f"{frame} {self._spin_msg}")
+        self._spin_idx += 1
+        self._spin_job = self.base.after(80, self._spin_tick)
+
+    def _spin_stop(self, done_text: str = "", ok: bool = True) -> None:
+        if self._spin_job is not None:
+            self.base.after_cancel(self._spin_job)
+            self._spin_job = None
+        self._spin_label.config(fg=_DONE_COLOR if ok else _ERR_COLOR,
+                                text=done_text)
+
     def _run_in_thread(self, fn, *args) -> tuple[threading.Thread, list]:
         """Run fn(*args) in a daemon thread; store any exception in exc_box[0]."""
         exc_box: list = []
@@ -215,23 +248,25 @@ class pcapXrayGui:
                            f"Cached analysis found for '{self.filename}'.\n"
                            "Reload without re-parsing the PCAP?"):
                 log.info("pcap_analyse: reloading session '%s' from cache", self.filename)
-                self.progressbar.start()
+                self._spin_start("Loading cache")
                 self._store.load_session(self.filename)
-                self.progressbar.stop()
+                self._spin_stop(f"✓ {len(memory.packet_db)} sessions (cached)")
                 self._populate_filter_menus()
                 self._re_enable_controls()
                 return
 
-        self.progressbar.start()
+        self._spin_start("Reading packets")
         packet_read, exc_box = self._run_in_thread(pcap_reader.PcapEngine, self.pcap_file.get(), self.engine.get())
         self._poll_thread(packet_read)
-        self.progressbar.stop()
 
         if exc_box:
+            self._spin_stop("✗ Analysis failed", ok=False)
             log.error("PCAP analysis failed: %s", exc_box[0])
             mb.showerror("Analysis Error", f"PCAP analysis failed:\n{exc_box[0]}")
             self._re_enable_controls()
             return
+
+        self._spin_stop(f"✓ {len(memory.packet_db)} sessions")
 
         log.info("pcap_analyse: read complete, generating packet report")
         threading.Thread(target=report_generator.ReportGenerator(self.destination_report.get(), self.filename).packetDetails, args=(), daemon=True).start()
@@ -248,7 +283,6 @@ class pcapXrayGui:
         self.from_menu.set("All")
         self.to_menu.set("All")
         self.option.set("All")
-        self.progressbar.start()
         self.to_hosts += list(memory.destination_hosts.keys())
         for mac in list(memory.lan_hosts.keys()):
             self.base.update()
@@ -256,7 +290,6 @@ class pcapXrayGui:
         self.to_hosts = list(set(self.to_hosts + self.from_hosts))
         self.to_menu['values'] = self.to_hosts
         self.from_menu['values'] = self.from_hosts
-        self.progressbar.stop()
 
     def _re_enable_controls(self) -> None:
         self.trigger['state'] = 'normal'
@@ -271,10 +304,10 @@ class pcapXrayGui:
         if self.details_fetch == 0:
             t, _ = self._run_in_thread(communication_details_fetch.TrafficDetailsFetch, "sock")
             t1, _ = self._run_in_thread(device_details_fetch.FetchDeviceDetails("ieee").fetch_info)
-            self.progressbar.start()
+            self._spin_start("Resolving hosts")
             self._poll_thread(t)
             self._poll_thread(t1)
-            self.progressbar.stop()
+            self._spin_stop("✓ Hosts resolved")
 
             self.details_fetch = 1
             rpt = report_generator.ReportGenerator(self.destination_report.get(), self.filename)
@@ -285,13 +318,14 @@ class pcapXrayGui:
         self.image_file = os.path.join(self.destination_report.get(), "Report", self.filename + "_" + options + ".png")
         if not os.path.exists(self.image_file):
             t1, exc_box = self._run_in_thread(plot_lan_network.PlotLan, self.filename, self.destination_report.get(), self.option.get(), self.to_ip.get(), self.from_ip.get())
-            self.progressbar.start()
+            self._spin_start("Rendering graph")
             self._poll_thread(t1)
-            self.progressbar.stop()
             if exc_box:
+                self._spin_stop("✗ Render failed", ok=False)
                 log.error("Graph generation failed: %s", exc_box[0])
                 mb.showerror("Graph Error", f"Graph generation failed:\n{exc_box[0]}")
                 return
+            self._spin_stop("✓ Graph ready")
             self.label.grid_forget()
             self.load_image()
         else:
