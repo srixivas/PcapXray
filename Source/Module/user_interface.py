@@ -25,12 +25,12 @@ import sqlite_store
 import memory
 from PIL import Image, ImageTk
 
-_SPIN_FRAMES  = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
-_SPIN_TRAIL   = 5            # how many frames to show as a rolling wave
-_SPIN_COLOR   = "#4fc3f7"   # cyan — active
+_SPIN_FRAMES  = ("⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷")
+_SPIN_TRAIL   = 8            # how many frames to show as a rolling wave
+_SPIN_COLOR   = "#2196f3"   # blue — active
 _DONE_COLOR   = "#81c784"   # green — success
 _ERR_COLOR    = "#e57373"   # red   — error
-_SPIN_FONT    = ("Courier", 13)
+_SPIN_FONT    = ("Courier", 15, "bold")
 _SPIN_WIDTH   = 38           # fixed character width — prevents layout reflow
 
 
@@ -45,6 +45,14 @@ class pcapXrayGui:
         base.title("PcapXray")
         Label(base, text="PcapXray Tool - A LAN Network Analyzer")
 
+        # Load dock icon; re-applied after matplotlib overwrites it
+        try:
+            _icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.gif")
+            self._icon_photo = tk.PhotoImage(file=_icon_path)
+            base.iconphoto(True, self._icon_photo)
+        except Exception:
+            self._icon_photo = None
+
         # Style Configuration
         style = ttk.Style()
         style.configure("BW.TLabel", foreground="black")
@@ -53,7 +61,7 @@ class pcapXrayGui:
         # 1st Frame - Initial Frame
         InitFrame = ttk.Frame(base,  width=50, padding="10 0 0 0",relief= GROOVE)
         InitFrame.grid(column=10, row=10, sticky=(N, W, E, S))
-        InitFrame.columnconfigure(4, weight=1)
+        InitFrame.columnconfigure(5, weight=1)
         InitFrame.rowconfigure(0, weight=1)
 
         # Pcap File Entry
@@ -62,11 +70,16 @@ class pcapXrayGui:
         ttk.Label(InitFrame, text="Enter pcap file path: ",style="BW.TLabel").grid(column=0, row=0, sticky="W")
         self.filename_field = ttk.Entry(InitFrame, width=32, textvariable=self.pcap_file, style="BW.TEntry").grid(column=1, row=0, sticky="W, E")
         ttk.Button(InitFrame, text="Browse", command=lambda: self.browse_directory("pcap")).grid(column=2, row=0, padx=10, pady=10, sticky="E")
+        # Engine selector sits before Analyze so the choice is visible before running
+        self.engine = StringVar(value="auto")
+        ttk.OptionMenu(InitFrame, self.engine, "auto", "auto", "dpkt", "scapy", "pyshark").grid(
+            column=3, row=0, padx=5, sticky="W"
+        )
         self.analyze_button = ttk.Button(InitFrame, text="Analyze!", command=self.pcap_analyse)
-        self.analyze_button.grid(column=3, row=0, padx=10, pady=10, sticky="E")
+        self.analyze_button.grid(column=4, row=0, padx=10, pady=10, sticky="E")
         self._spin_label = tk.Label(InitFrame, text="", fg=_SPIN_COLOR,
                                     font=_SPIN_FONT, width=_SPIN_WIDTH, anchor="w")
-        self._spin_label.grid(column=4, row=0, padx=10, pady=10, sticky="EW")
+        self._spin_label.grid(column=5, row=0, padx=10, pady=10, sticky="EW")
         self._spin_job: str | None = None
         self._spin_idx = 0
         self._spin_msg = ""
@@ -82,13 +95,7 @@ class pcapXrayGui:
         self.report_field = ttk.Entry(FirstFrame, width=30, textvariable=self.destination_report, style="BW.TEntry").grid(column=1, row=0, sticky="W, E")
         
         # Browse button
-        ttk.Button(FirstFrame, text="Browse", command=lambda: self.browse_directory("report")).grid(column=2, row=0, padx=10, pady=10,sticky="E")     
-
-        # Pcap Engine selector
-        self.engine = StringVar(value="auto")
-        ttk.OptionMenu(FirstFrame, self.engine, "auto", "auto", "dpkt", "scapy", "pyshark").grid(
-            row=0, column=3, padx=5, sticky="W"
-        )
+        ttk.Button(FirstFrame, text="Browse", command=lambda: self.browse_directory("report")).grid(column=2, row=0, padx=10, pady=10,sticky="E")
 
         # Zoom 
         self.zoom = [900,500]
@@ -168,8 +175,7 @@ class pcapXrayGui:
             else:
                 mb.showerror("Error", "Enter a output directory!")
         # Restore focus to main window after any native dialog (macOS loses focus otherwise)
-        self.base.lift()
-        self.base.focus_force()
+        self._force_focus()
     
     """
     def update_ips(self, direction):
@@ -186,6 +192,18 @@ class pcapXrayGui:
     # ------------------------------------------------------------------
     # Spinner helpers
     # ------------------------------------------------------------------
+
+    def _force_focus(self) -> None:
+        """Bring the window to the front with real mouse focus on macOS.
+
+        focus_force() alone only sets Tk's internal focus; macOS still requires
+        a click to activate the window for mouse events.  Briefly setting
+        -topmost forces the OS to grant full activation, then we remove it.
+        """
+        self.base.attributes('-topmost', True)
+        self.base.lift()
+        self.base.focus_force()
+        self.base.after(200, lambda: self.base.attributes('-topmost', False))
 
     def _spin_start(self, text: str = "Working") -> None:
         self._spin_msg = text
@@ -299,12 +317,12 @@ class pcapXrayGui:
         self.from_menu['values'] = self.from_hosts
 
     def _re_enable_controls(self) -> None:
+        # Graph Panel and Interactive Graph stay disabled until Visualize! succeeds
         self.trigger['state'] = 'normal'
-        self.ibutton['state'] = 'normal'
-        self.browser_button['state'] = 'normal'
         self.to_menu['state'] = 'normal'
         self.from_menu['state'] = 'normal'
         self.analyze_button['state'] = 'normal'
+        self.base.after(100, self._force_focus)
 
     def generate_graph(self):
         log.info("generate_graph: option=%s to=%s from=%s", self.option.get(), self.to_ip.get(), self.from_ip.get())
@@ -338,11 +356,15 @@ class pcapXrayGui:
         else:
             self.label.grid_forget()
             self.load_image()
+        # Both graph buttons become available once a graph exists
         self.ibutton['state'] = 'normal'
+        self.browser_button['state'] = 'normal'
 
     def gimmick(self):
         import interactive_gui
         interactive_gui.gimmick_initialize(self.base, "file://" + self.image_file.replace(".png", ".html"))
+        if self._icon_photo is not None:
+            self.base.after(300, lambda: self.base.iconphoto(True, self._icon_photo))
 
     def open_in_browser(self):
         html_path = self.image_file.replace(".png", ".html")
@@ -383,10 +405,10 @@ class pcapXrayGui:
         self.ibutton['state'] = 'disabled'
         self.browser_button['state'] = 'disabled'
         self.generate_graph()
+        # ibutton and browser_button enabled inside generate_graph on success only
         self.trigger['state'] = 'normal'
-        self.ibutton['state'] = 'normal'
-        self.browser_button['state'] = 'normal'
         self.analyze_button['state'] = 'normal'
+        self.base.after(100, self._force_focus)
 
     def zoom_in(self):
         log.debug("zoom_in")
@@ -418,8 +440,16 @@ class OtherFrame(Toplevel):
 def main():
     base = Tk()
     pcapXrayGui(base)
-    # macOS: grab focus after the window fully renders (avoids needing to
-    # click the title bar before buttons respond)
-    base.after(200, lambda: (base.lift(), base.focus_force()))
+    def _reopen():
+        base.deiconify()
+        base.attributes('-topmost', True)
+        base.lift()
+        base.focus_force()
+        base.after(200, lambda: base.attributes('-topmost', False))
+
+    # macOS: grab focus after the window fully renders
+    base.after(200, _reopen)
+    # macOS: restore window when dock icon is clicked while app is running
+    base.createcommand('::tk::mac::ReopenApplication', _reopen)
     base.mainloop()
 
