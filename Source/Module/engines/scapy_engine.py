@@ -89,7 +89,9 @@ def _normalize(pkt) -> NormalizedPacket | None:
             payload_bytes = b""
         if "DNS" in pkt:
             try:
-                raw = pkt["DNS"].qd.qname
+                # qd is a PacketListField in scapy >= 2.5; access first element
+                qd = pkt["DNS"].qd
+                raw = qd[0].qname if hasattr(qd, "__getitem__") else qd.qname
                 dns_qname = (raw.decode("ascii", errors="replace") if isinstance(raw, bytes) else str(raw)).rstrip(".")
             except Exception:
                 pass
