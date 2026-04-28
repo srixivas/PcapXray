@@ -149,7 +149,6 @@ def refresh_live() -> None:
     Uses spring_layout (~100ms, no subprocess). Called every ~4s during live capture.
     No-op if the panel is not open.
     """
-    global _ax, _canvas_widget, _figure
     if _ax is None or _canvas_widget is None:
         return
     G, pos, node_colors, edge_colors = _build_graph_data(live=True)
@@ -163,7 +162,6 @@ def refresh_live() -> None:
 
 def open_live_panel(base: tk.Tk) -> None:
     """Open the live graph panel, closing any existing panel first (never toggles)."""
-    global _container
     if _container is not None and _container.winfo_exists():
         _close()
     gimmick_initialize(base, "", live=True)
@@ -171,7 +169,6 @@ def open_live_panel(base: tk.Tk) -> None:
 
 def set_panel_title(title: str) -> None:
     """Update the info bar text (used to show Live vs. stopped state)."""
-    global _info_var
     if _info_var is not None:
         _info_var.set(title)
 
