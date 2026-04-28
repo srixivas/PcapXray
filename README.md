@@ -38,40 +38,29 @@ Tool Highlights:
 
 ### Setup 
 
-* Python 3
+* Python 3.10+
 
+**Linux (Ubuntu/Debian):**
 ```bash
-apt install python3-pip
-apt install python3-tk
-apt install graphviz
-apt install python3-pil python3-pil.imagetk
+sudo apt-get install -y python3-tk graphviz tshark
 pip3 install -r requirements.txt
-python3 Source/main.py
-```
-( Make sure to escalate privilege to allow file creations - Run with `sudo` )
-
-For MAC:
-```
-brew install graphviz
+sudo python3 Source/main.py
 ```
 
-* Python 2
+> If you are using a specific Python version (e.g. 3.11 or 3.12), replace `python3-tk` with `python3.11-tk` or `python3.12-tk` accordingly. Pillow is installed via pip — do not install `python3-pil` from apt as it conflicts.
 
+**macOS:**
 ```bash
-apt install python-tk
-apt install graphviz
-pip install -r requirements.txt
-python Source/main.py
+brew install graphviz
+pip3 install -r requirements.txt
+sudo python3 Source/main.py
 ```
-( Make sure to escalate privilege to allow file creations - Run with `sudo` )
 
-### Python Libraries Used:  - All these libraries are required for functionality
-* Tkinter and TTK – Install from pip or apt-get – Ensure Tkinter and graphviz is installed (Most Linux contain by default) 
-  * apt install python-tk
-  * apt install graphviz
-  * apt install python3-tk (for python3 support)
-  * Sometimes ImageTk errors are thrown in python3 env --> use apt install python3-pil python3-pil.imagetk
-* All these are included in the requirements.txt file
+( `sudo` is required for live capture. File analysis can run without it. )
+
+### Python Libraries Used
+* All dependencies are in `requirements.txt` — install with `pip3 install -r requirements.txt`
+* Tkinter is the only library not on PyPI — install via your system package manager (`python3-tk` on Linux, included with Python on macOS)
   * Scapy – rdpcap to read the packets from the pcap file 
   *	Ipwhois – to obtain whois information from ip
   *	Netaddr – to check ip information type
