@@ -42,6 +42,7 @@ Tool Highlights:
 
 **Linux (Ubuntu/Debian):**
 ```bash
+sudo apt-get update
 sudo apt-get install -y python3-tk graphviz tshark
 pip3 install -r requirements.txt
 sudo python3 Source/main.py
