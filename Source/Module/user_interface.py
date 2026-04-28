@@ -167,6 +167,10 @@ class pcapXrayGui:
         self.label = ttk.Label(self.ThirdFrame, text=description, style="BW.TLabel",
                                anchor="w", justify="left", wraplength=580)
         self.label.grid(column=0, row=0, sticky="NW", padx=4, pady=4)
+        self.xscrollbar = Scrollbar(self.ThirdFrame, orient=HORIZONTAL)
+        self.xscrollbar.grid(row=1, column=0, sticky=E + W)
+        self.yscrollbar = Scrollbar(self.ThirdFrame, orient=VERTICAL)
+        self.yscrollbar.grid(row=0, column=1, sticky=N + S)
         self.ThirdFrame.grid(column=10, row=40, sticky=(N, W, E, S))
         self.ThirdFrame.columnconfigure(0, weight=1)
         self.ThirdFrame.rowconfigure(0, weight=1)
