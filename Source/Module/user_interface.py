@@ -85,15 +85,16 @@ class pcapXrayGui:
         self._spin_msg = ""
 
         # First Frame with Report Directory
-        # Output and Results Frame
         FirstFrame = ttk.Frame(base, width=50, padding="10 0 0 0", relief=GROOVE)
         FirstFrame.grid(column=10, row=20, sticky=(N, W, E, S))
+        FirstFrame.columnconfigure(3, weight=1)  # spacer pushes zoom buttons to the right
         self.destination_report = StringVar(value=sys.path[0])
         ttk.Label(FirstFrame, text="Output directory path: ", style="BW.TLabel").grid(column=0, row=0, sticky="W")
         self.report_field = ttk.Entry(FirstFrame, width=30, textvariable=self.destination_report, style="BW.TEntry").grid(column=1, row=0, sticky="WE")
         ttk.Button(FirstFrame, text="Browse", command=lambda: self.browse_directory("report")).grid(column=2, row=0, padx=10, pady=10, sticky="E")
-
         self.zoom = [900, 500]
+        ttk.Button(FirstFrame, text="zoomIn", command=self.zoom_in).grid(row=0, column=4, padx=5, sticky="E")
+        ttk.Button(FirstFrame, text="zoomOut", command=self.zoom_out).grid(row=0, column=5, padx=10, sticky="E")
 
         # Live Capture Frame
         LiveFrame = ttk.Frame(base, width=50, padding="10 2 0 2", relief=GROOVE)
@@ -114,21 +115,17 @@ class pcapXrayGui:
         # Second Frame with Options
         SecondFrame = ttk.Frame(base,  width=50, padding="10 10 10 10",relief= GROOVE)
         SecondFrame.grid(column=10, row=30, sticky=(N, W, E, S))
-        SecondFrame.columnconfigure(10, weight=1)
-        SecondFrame.rowconfigure(30, weight=1)
-        ttk.Label(SecondFrame, text="Traffic: ", style="BW.TLabel").grid(row=10,column=0,sticky="W")
+        SecondFrame.columnconfigure(6, weight=1)  # spacer pushes graph buttons to the right
+        ttk.Label(SecondFrame, text="Traffic: ", style="BW.TLabel").grid(row=10, column=0, sticky="W")
         self.option = StringVar()
         self.options = {'All', 'HTTP', 'HTTPS', 'Tor', 'Malicious', 'ICMP', 'DNS'}
-        #self.option.set('Tor')
-        ttk.OptionMenu(SecondFrame,self.option,"Select",*self.options).grid(row=10,column=1, padx=10, sticky="W")
+        ttk.OptionMenu(SecondFrame, self.option, "Select", *self.options).grid(row=10, column=1, padx=10, sticky="W")
         self.ibutton = ttk.Button(SecondFrame, text="Graph Panel", command=self.gimmick)
-        self.ibutton.grid(row=10, column=10, padx=10, sticky="E")
+        self.ibutton.grid(row=10, column=7, padx=10, sticky="E")
         self.trigger = ttk.Button(SecondFrame, text="Visualize!", command=self.map_select)
-        self.trigger.grid(row=10, column=11, sticky="E")
+        self.trigger.grid(row=10, column=8, sticky="E")
         self.browser_button = ttk.Button(SecondFrame, text="Interactive Graph", command=self.open_in_browser)
-        self.browser_button.grid(row=10, column=12, padx=10, sticky="E")
-        ttk.Button(SecondFrame, text="＋ Zoom", command=self.zoom_in).grid(row=10, column=13, padx=4, sticky="E")
-        ttk.Button(SecondFrame, text="－ Zoom", command=self.zoom_out).grid(row=10, column=14, padx=4, sticky="E")
+        self.browser_button.grid(row=10, column=9, padx=10, sticky="E")
         self.trigger['state'] = 'disabled'
         self.ibutton['state'] = 'disabled'
         self.browser_button['state'] = 'disabled'
@@ -154,21 +151,22 @@ class pcapXrayGui:
         self.option.set("All")
 
         # Third Frame with Results and Descriptions
-        self.ThirdFrame = ttk.Frame(base, padding="20 10 20 10", relief=GROOVE)
+        self.ThirdFrame = ttk.Frame(base, padding="24 10 10 10", relief=GROOVE)
         description = (
             "Description:\n"
-            "PcapXray is an aid for Network Forensics and Network Analysis.\n"
-            "It simplifies network traffic analysis and accomplishes 5 modules:\n\n"
-            "  1. Web Traffic\n"
-            "  2. Tor Traffic\n"
-            "  3. Malicious Traffic\n"
-            "  4. Device / Traffic Details\n"
-            "  5. Covert Communication\n\n"
-            "Contact: spg349@nyu.edu"
+            "PcapXray tools is an aid for Network Forensics or Any Network Analysis!\n"
+            "It is a tool aimed to simplify the network analysis and speed the process of analysing the network traffic.\n"
+            "This prototype aims to accomplish 5 important modules,\n\n"
+            " 1. Web Traffic\n"
+            " 2. Tor Traffic\n"
+            " 3. Malicious Traffic\n"
+            " 4. Device/Traffic Details\n"
+            " 5. Covert Communication\n\n"
+            "Please contact me @ spg349@nyu.edu for any bugs or problems !"
         )
         self.label = ttk.Label(self.ThirdFrame, text=description, style="BW.TLabel",
-                               anchor="center", justify="center", wraplength=700)
-        self.label.grid(column=0, row=0, sticky="NSEW")
+                               anchor="w", justify="left", wraplength=580)
+        self.label.grid(column=0, row=0, sticky="NW", padx=4, pady=4)
         self.ThirdFrame.grid(column=10, row=40, sticky=(N, W, E, S))
         self.ThirdFrame.columnconfigure(0, weight=1)
         self.ThirdFrame.rowconfigure(0, weight=1)
