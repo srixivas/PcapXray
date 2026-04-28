@@ -277,8 +277,10 @@ class pcapXrayGui:
             iface = engine._iface
             self._spin_start("Running covert check")
             t, _ = self._run_in_thread(engine.stop)
-            self._poll_thread(t)
-            self._spin_stop(f"✓ {len(memory.packet_db)} sessions captured")
+            try:
+                self._poll_thread(t)
+            finally:
+                self._spin_stop(f"✓ {len(memory.packet_db)} sessions captured")
             import time
             self._store.save_session(f"live_{iface}_{int(time.time())}")
 
@@ -332,12 +334,19 @@ class pcapXrayGui:
         self.base.after(200, lambda: self.base.attributes('-topmost', False))
 
     def _spin_start(self, text: str = "Working") -> None:
+        if self._spin_job is not None:
+            self.base.after_cancel(self._spin_job)
+            self._spin_job = None
         self._spin_msg = text
         self._spin_idx = 0
-        self._spin_label.config(fg=_SPIN_COLOR)
-        self._spin_tick()
+        if self._spin_label.winfo_exists():
+            self._spin_label.config(fg=_SPIN_COLOR)
+            self._spin_tick()
 
     def _spin_tick(self) -> None:
+        if not self._spin_label.winfo_exists():
+            self._spin_job = None
+            return
         n = len(_SPIN_FRAMES)
         trail = "".join(
             _SPIN_FRAMES[(self._spin_idx - _SPIN_TRAIL + i) % n]
@@ -351,8 +360,9 @@ class pcapXrayGui:
         if self._spin_job is not None:
             self.base.after_cancel(self._spin_job)
             self._spin_job = None
-        self._spin_label.config(fg=_DONE_COLOR if ok else _ERR_COLOR,
-                                text=done_text)
+        if self._spin_label.winfo_exists():
+            self._spin_label.config(fg=_DONE_COLOR if ok else _ERR_COLOR,
+                                    text=done_text)
 
     def _run_in_thread(self, fn, *args) -> tuple[threading.Thread, list]:
         """Run fn(*args) in a daemon thread; store any exception in exc_box[0]."""
@@ -369,7 +379,10 @@ class pcapXrayGui:
     def _poll_thread(self, thread: threading.Thread) -> None:
         """Block the caller while driving the Tk event loop until thread finishes."""
         while thread.is_alive():
-            self.base.update()
+            try:
+                self.base.update()
+            except Exception as exc:
+                log.debug("_poll_thread: update error (ignored): %s", exc)
             thread.join(timeout=0.05)
 
     def pcap_analyse(self):
