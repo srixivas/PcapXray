@@ -86,21 +86,14 @@ class pcapXrayGui:
 
         # First Frame with Report Directory
         # Output and Results Frame
-        FirstFrame = ttk.Frame(base,  width=50, padding="10 0 0 0", relief= GROOVE)
+        FirstFrame = ttk.Frame(base, width=50, padding="10 0 0 0", relief=GROOVE)
         FirstFrame.grid(column=10, row=20, sticky=(N, W, E, S))
-        FirstFrame.columnconfigure(10, weight=1)
-        FirstFrame.rowconfigure(20, weight=1)
         self.destination_report = StringVar(value=sys.path[0])
-        ttk.Label(FirstFrame, text="Output directory path: ",style="BW.TLabel").grid(column=0, row=0, sticky="W")
-        self.report_field = ttk.Entry(FirstFrame, width=30, textvariable=self.destination_report, style="BW.TEntry").grid(column=1, row=0, sticky="W, E")
-        
-        # Browse button
-        ttk.Button(FirstFrame, text="Browse", command=lambda: self.browse_directory("report")).grid(column=2, row=0, padx=10, pady=10,sticky="E")
+        ttk.Label(FirstFrame, text="Output directory path: ", style="BW.TLabel").grid(column=0, row=0, sticky="W")
+        self.report_field = ttk.Entry(FirstFrame, width=30, textvariable=self.destination_report, style="BW.TEntry").grid(column=1, row=0, sticky="WE")
+        ttk.Button(FirstFrame, text="Browse", command=lambda: self.browse_directory("report")).grid(column=2, row=0, padx=10, pady=10, sticky="E")
 
-        # Zoom 
-        self.zoom = [900,500]
-        ttk.Button(FirstFrame, text="zoomIn", command=self.zoom_in).grid(row=0,column=10, padx=5, sticky="E")
-        ttk.Button(FirstFrame, text="zoomOut", command=self.zoom_out).grid(row=0,column=19,padx=10, sticky="E")   
+        self.zoom = [900, 500]
 
         # Live Capture Frame
         LiveFrame = ttk.Frame(base, width=50, padding="10 2 0 2", relief=GROOVE)
@@ -131,9 +124,11 @@ class pcapXrayGui:
         self.ibutton = ttk.Button(SecondFrame, text="Graph Panel", command=self.gimmick)
         self.ibutton.grid(row=10, column=10, padx=10, sticky="E")
         self.trigger = ttk.Button(SecondFrame, text="Visualize!", command=self.map_select)
-        self.trigger.grid(row=10,column=11, sticky="E")
+        self.trigger.grid(row=10, column=11, sticky="E")
         self.browser_button = ttk.Button(SecondFrame, text="Interactive Graph", command=self.open_in_browser)
         self.browser_button.grid(row=10, column=12, padx=10, sticky="E")
+        ttk.Button(SecondFrame, text="＋ Zoom", command=self.zoom_in).grid(row=10, column=13, padx=4, sticky="E")
+        ttk.Button(SecondFrame, text="－ Zoom", command=self.zoom_out).grid(row=10, column=14, padx=4, sticky="E")
         self.trigger['state'] = 'disabled'
         self.ibutton['state'] = 'disabled'
         self.browser_button['state'] = 'disabled'
@@ -158,17 +153,22 @@ class pcapXrayGui:
         self.to_menu.set("All")
         self.option.set("All")
 
-        # Third Frame with Results and Descriptioms
-        self.ThirdFrame = ttk.Frame(base,  width=100, height=100, padding="10 10 10 10",relief= GROOVE)
-        description = """It is a tool aimed to simplyfy the network analysis and speed the process of analysing the network traffic.\nThis prototype aims to accomplish 4 important modules,
-                        \n 1. Web Traffic\n 2. Tor Traffic \n 3. Malicious Traffic \n 4. Device/Traffic Details \n 5. Covert Communication \n \nPlease contact me @ spg349@nyu.edu for any bugs or problems !
-                      """
-        self.label = ttk.Label(self.ThirdFrame, text="Description: \nPcapXray tools is an aid for Network Forensics or Any Network Analysis!\n"+description, style="BW.TLabel")
-        self.label.grid(column=10, row=10,sticky="W")
-        self.xscrollbar = Scrollbar(self.ThirdFrame, orient=HORIZONTAL)
-        self.xscrollbar.grid(row=100, column=0, sticky=E + W)
-        self.yscrollbar = Scrollbar(self.ThirdFrame, orient=VERTICAL)
-        self.yscrollbar.grid(row=0, column=100, sticky=N + S)
+        # Third Frame with Results and Descriptions
+        self.ThirdFrame = ttk.Frame(base, padding="20 10 20 10", relief=GROOVE)
+        description = (
+            "Description:\n"
+            "PcapXray is an aid for Network Forensics and Network Analysis.\n"
+            "It simplifies network traffic analysis and accomplishes 5 modules:\n\n"
+            "  1. Web Traffic\n"
+            "  2. Tor Traffic\n"
+            "  3. Malicious Traffic\n"
+            "  4. Device / Traffic Details\n"
+            "  5. Covert Communication\n\n"
+            "Contact: spg349@nyu.edu"
+        )
+        self.label = ttk.Label(self.ThirdFrame, text=description, style="BW.TLabel",
+                               anchor="center", justify="center", wraplength=700)
+        self.label.grid(column=0, row=0, sticky="NSEW")
         self.ThirdFrame.grid(column=10, row=40, sticky=(N, W, E, S))
         self.ThirdFrame.columnconfigure(0, weight=1)
         self.ThirdFrame.rowconfigure(0, weight=1)
