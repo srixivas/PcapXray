@@ -591,16 +591,29 @@ def main():
     base = Tk()
     pcapXrayGui(base)
     def _reopen():
-        base.wm_state('normal')
+        # On macOS/Tk Cocoa, wm_state('normal') + deiconify() is a no-op for iconic
+        # windows because deiconify() sees state already 'normal'. The only reliable
+        # path is withdraw() → deiconify() which forces NSWindow orderOut + makeKeyAndOrderFront.
+        if base.wm_state() == 'iconic':
+            base.withdraw()
         base.deiconify()
         base.attributes('-topmost', True)
         base.lift()
         base.focus_force()
         base.after(200, lambda: base.attributes('-topmost', False))
 
+    def _on_map(event):
+        # macOS native deminiaturize bypasses ReopenApplication — catch it here.
+        if event.widget is base:
+            base.lift()
+            base.focus_force()
+
     # macOS: grab focus after the window fully renders
     base.after(200, _reopen)
     # macOS: restore window when dock icon is clicked while app is running
     base.createcommand('::tk::mac::ReopenApplication', _reopen)
+    import platform
+    if platform.system() == 'Darwin':
+        base.bind('<Map>', _on_map)
     base.mainloop()
 
