@@ -102,6 +102,22 @@ class pcapXrayGui:
         ttk.Button(FirstFrame, text="zoomIn", command=self.zoom_in).grid(row=0,column=10, padx=5, sticky="E")
         ttk.Button(FirstFrame, text="zoomOut", command=self.zoom_out).grid(row=0,column=19,padx=10, sticky="E")   
 
+        # Live Capture Frame
+        LiveFrame = ttk.Frame(base, width=50, padding="10 2 0 2", relief=GROOVE)
+        LiveFrame.grid(column=10, row=25, sticky=(N, W, E, S))
+        ttk.Label(LiveFrame, text="Interface:", style="BW.TLabel").grid(row=0, column=0, sticky="W")
+        self.live_iface = StringVar(value="")
+        self.live_iface_menu = ttk.Combobox(LiveFrame, width=12, textvariable=self.live_iface, state="readonly")
+        self.live_iface_menu.grid(row=0, column=1, padx=5, sticky="W")
+        # Populate after window renders so it doesn't block startup
+        base.after(500, self._populate_ifaces)
+        self.live_button = ttk.Button(LiveFrame, text="▶ Start Live", command=self._toggle_live)
+        self.live_button.grid(row=0, column=2, padx=10, sticky="W")
+        self._live_status = tk.Label(LiveFrame, text="", fg="#aaaaaa", font=("Courier", 11))
+        self._live_status.grid(row=0, column=3, padx=10, sticky="W")
+        self._live_engine = None
+        self._live_job: str | None = None
+
         # Second Frame with Options
         SecondFrame = ttk.Frame(base,  width=50, padding="10 10 10 10",relief= GROOVE)
         SecondFrame.grid(column=10, row=30, sticky=(N, W, E, S))
@@ -188,6 +204,116 @@ class pcapXrayGui:
                 self.from_hosts += memory.lan_hosts[mac].ip
             self.from_menu['values'] = self.from_hosts
     """
+
+    # ------------------------------------------------------------------
+    # Live capture helpers
+    # ------------------------------------------------------------------
+
+    def _populate_ifaces(self) -> None:
+        """Fill the interface dropdown from scapy (called once at startup)."""
+        try:
+            from scapy.interfaces import get_if_list
+            ifaces = get_if_list()
+        except Exception:
+            ifaces = []
+        if ifaces:
+            self.live_iface_menu["values"] = ifaces
+            self.live_iface.set(ifaces[0])
+
+    def _toggle_live(self) -> None:
+        if self._live_engine and self._live_engine.is_running():
+            self._stop_live()
+        else:
+            self._start_live()
+
+    def _start_live(self) -> None:
+        iface = self.live_iface.get().strip()
+        if not iface:
+            mb.showerror("Live Capture", "Select a network interface first.")
+            return
+
+        # Cancel any orphaned refresh job from a previous run
+        if self._live_job is not None:
+            self.base.after_cancel(self._live_job)
+            self._live_job = None
+
+        import pcap_reader
+        try:
+            self._live_engine = pcap_reader.LivePcapEngine(iface)
+            self._live_engine.start()
+        except PermissionError:
+            mb.showerror("Permission denied",
+                         "Live capture requires elevated privileges.\n"
+                         "Run PcapXray with sudo (macOS/Linux) or as Administrator (Windows).")
+            self._live_engine = None
+            return
+        except Exception as exc:
+            mb.showerror("Live Capture Error", str(exc))
+            self._live_engine = None
+            return
+
+        # Use interface name as filename so Visualize! produces a sensible path
+        self.filename = f"live_{iface}"
+
+        self.live_button.config(text="⏹ Stop")
+        self._live_status.config(text="📡 Live — graph updates every 4s", fg="#2196f3")
+        self._disable_file_controls()
+        # Always open a fresh live panel (never toggles on repeat runs)
+        import interactive_gui
+        interactive_gui.open_live_panel(self.base)
+        if self._icon_photo is not None:
+            self.base.after(300, lambda: self.base.iconphoto(True, self._icon_photo))
+        self._live_job = self.base.after(4000, self._live_refresh)
+
+    def _stop_live(self) -> None:
+        if self._live_job is not None:
+            self.base.after_cancel(self._live_job)
+            self._live_job = None
+        engine = self._live_engine
+        # Clear before _poll_thread so any _live_refresh firing during base.update()
+        # sees None and returns without rescheduling.
+        self._live_engine = None
+        if engine:
+            iface = engine._iface
+            self._spin_start("Running covert check")
+            t, _ = self._run_in_thread(engine.stop)
+            self._poll_thread(t)
+            self._spin_stop(f"✓ {len(memory.packet_db)} sessions captured")
+            import time
+            self._store.save_session(f"live_{iface}_{int(time.time())}")
+
+        self.live_button.config(text="▶ Start Live")
+        self._live_status.config(text="📡 Captured — click Visualize! for snapshot", fg="#81c784")
+        import interactive_gui
+        interactive_gui.refresh_live()
+        interactive_gui.set_panel_title("Network Graph (stopped)  |  Click Visualize! to generate static snapshot")
+        self._enable_file_controls()
+        self._populate_filter_menus()
+        self.trigger['state'] = 'normal'
+        self.base.after(100, self._force_focus)
+
+    def _live_refresh(self) -> None:
+        if self._live_engine is None or not self._live_engine.is_running():
+            return
+        pkts = self._live_engine.packet_count
+        sessions = len(memory.packet_db)
+        self._live_status.config(text=f"📡 {pkts} pkts  {sessions} sessions")
+        import interactive_gui
+        interactive_gui.refresh_live()
+        self._live_job = self.base.after(4000, self._live_refresh)
+
+    def _disable_file_controls(self) -> None:
+        self.analyze_button['state'] = 'disabled'
+        self.trigger['state'] = 'disabled'
+        self.ibutton['state'] = 'disabled'
+        self.browser_button['state'] = 'disabled'
+        self.to_menu['state'] = 'disabled'
+        self.from_menu['state'] = 'disabled'
+
+    def _enable_file_controls(self) -> None:
+        self.analyze_button['state'] = 'normal'
+        self.to_menu['state'] = 'normal'
+        self.from_menu['state'] = 'normal'
 
     # ------------------------------------------------------------------
     # Spinner helpers

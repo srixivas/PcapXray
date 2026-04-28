@@ -13,46 +13,33 @@ from tkinter import ttk
 
 import memory
 
-__all__ = ["gimmick_initialize"]
+__all__ = ["gimmick_initialize", "open_live_panel", "refresh_live", "set_panel_title"]
 
 log = logging.getLogger(__name__)
 
 _container: tk.Frame | None = None
 _figure = None
+_ax = None
+_canvas_widget = None
+_info_var: tk.StringVar | None = None
 _base: tk.Tk | None = None
 
 
-def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
-    """Open (or close) the interactive graph panel."""
-    global _container, _figure, _base
+def _build_graph_data(live: bool = False):
+    """Build networkx graph + layout from current memory state.
 
-    if _container is not None and _container.winfo_exists():
-        _close()
-        return
-
+    Returns (G, pos, node_colors, edge_colors) or (None, ...) if nothing to show.
+    live=True uses spring_layout (~100ms); live=False tries graphviz first.
+    """
     try:
         import networkx as nx
-        import matplotlib
-        matplotlib.use("TkAgg")
-        import matplotlib.pyplot as plt
-        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-    except ImportError as exc:
-        log.warning("Interactive graph unavailable — missing dependency: %s", exc)
-        import webbrowser
-        webbrowser.open(_html_path)
-        return
+    except ImportError:
+        return None, None, None, None
 
-    if not memory.packet_db:
-        log.info("Interactive graph: no sessions in memory, nothing to show")
-        return
-
-    _base = base
-
-    # ── Build graph ───────────────────────────────────────────────────────────
     G = nx.MultiDiGraph()
     seen_edges: set[tuple] = set()
 
-    for session_key, session in memory.packet_db.items():
+    for session_key, session in list(memory.packet_db.items()):
         parts = session_key.split("/")
         if len(parts) != 3:
             continue
@@ -97,21 +84,21 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
         G.add_edge(src_label, dst_label, color=color, proto=proto)
 
     if not G.nodes:
-        log.info("Interactive graph: nothing to display")
-        return
+        return None, None, None, None
 
-    # ── Layout ────────────────────────────────────────────────────────────────
-    n_lan = len(memory.lan_hosts)
-    prog = "sfdp" if n_lan > 40 else "circo" if n_lan > 20 else "dot"
-    try:
-        pos = nx.nx_pydot.graphviz_layout(G, prog=prog)
-    except Exception as exc:
-        log.warning("graphviz_layout failed (%s), falling back to spring_layout", exc)
-        pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
+    if live:
+        pos = nx.spring_layout(G, k=2.5, iterations=50, seed=42)
+    else:
+        n_lan = len(memory.lan_hosts)
+        prog = "sfdp" if n_lan > 40 else "circo" if n_lan > 20 else "dot"
+        try:
+            pos = nx.nx_pydot.graphviz_layout(G, prog=prog)
+        except Exception as exc:
+            log.warning("graphviz_layout failed (%s), falling back to spring_layout", exc)
+            pos = nx.spring_layout(G, k=2.5, iterations=60, seed=42)
 
     pos = _normalize_pos(pos)
 
-    # ── Node / edge colours ───────────────────────────────────────────────────
     mal_ips = {s.split("/")[0] for s in memory.possible_mal_traffic} | \
               {s.split("/")[1] for s in memory.possible_mal_traffic}
     tor_ips = {s.split("/")[1] for s in memory.possible_tor_traffic}
@@ -132,13 +119,13 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
             node_colors.append("#ff7043")
 
     edge_colors = [d.get("color", "#607d8b") for _, _, d in G.edges(data=True)]
+    return G, pos, node_colors, edge_colors
 
-    # ── Figure ────────────────────────────────────────────────────────────────
-    # figsize is the minimum; FigureCanvasTkAgg auto-scales as the pane fills.
-    fig, ax = plt.subplots(figsize=(9, 7))
-    fig.patch.set_facecolor("#1e1e2e")
+
+def _draw_on_axes(ax, G, pos, node_colors, edge_colors) -> None:
+    import networkx as nx
+    ax.cla()
     ax.set_facecolor("#1e1e2e")
-
     nx.draw_networkx_nodes(G, pos, node_color=node_colors,
                            node_size=700, alpha=0.92, ax=ax)
     nx.draw_networkx_labels(G, pos, font_size=7, font_color="white", ax=ax)
@@ -148,84 +135,161 @@ def gimmick_initialize(base: tk.Tk, _html_path: str) -> None:
                            ax=ax, alpha=0.85)
     _add_legend(ax)
     ax.axis("off")
-
     _xs = [p[0] for p in pos.values()]
     _ys = [p[1] for p in pos.values()]
     _xp = max((max(_xs) - min(_xs)) * 0.4, 0.7)
     _yp = max((max(_ys) - min(_ys)) * 0.4, 0.7)
     ax.set_xlim(min(_xs) - _xp, max(_xs) + _xp)
     ax.set_ylim(min(_ys) - _yp, max(_ys) + _yp)
+
+
+def refresh_live() -> None:
+    """Redraw the existing panel in-place from current memory state.
+
+    Uses spring_layout (~100ms, no subprocess). Called every ~4s during live capture.
+    No-op if the panel is not open.
+    """
+    global _ax, _canvas_widget, _figure
+    if _ax is None or _canvas_widget is None:
+        return
+    G, pos, node_colors, edge_colors = _build_graph_data(live=True)
+    if G is None:
+        return
+    _draw_on_axes(_ax, G, pos, node_colors, edge_colors)
+    _figure.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
+    _canvas_widget.draw()
+    log.debug("refresh_live: %d nodes", len(G.nodes))
+
+
+def open_live_panel(base: tk.Tk) -> None:
+    """Open the live graph panel, closing any existing panel first (never toggles)."""
+    global _container
+    if _container is not None and _container.winfo_exists():
+        _close()
+    gimmick_initialize(base, "", live=True)
+
+
+def set_panel_title(title: str) -> None:
+    """Update the info bar text (used to show Live vs. stopped state)."""
+    global _info_var
+    if _info_var is not None:
+        _info_var.set(title)
+
+
+def gimmick_initialize(base: tk.Tk, _html_path: str, live: bool = False) -> None:
+    """Open (or close) the interactive graph panel."""
+    global _container, _figure, _ax, _canvas_widget, _info_var, _base
+
+    if _container is not None and _container.winfo_exists():
+        _close()
+        return
+
+    try:
+        import networkx as nx
+        import matplotlib
+        matplotlib.use("TkAgg")
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+    except ImportError as exc:
+        log.warning("Interactive graph unavailable — missing dependency: %s", exc)
+        import webbrowser
+        webbrowser.open(_html_path)
+        return
+
+    _base = base
+
+    G, pos, node_colors, edge_colors = _build_graph_data(live=live)
+    if G is None and not live:
+        log.info("Interactive graph: no sessions in memory, nothing to show")
+        return
+
+    # ── Figure ────────────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(9, 7))
+    fig.patch.set_facecolor("#1e1e2e")
+    ax.set_facecolor("#1e1e2e")
+
+    if G is not None:
+        _draw_on_axes(ax, G, pos, node_colors, edge_colors)
+    else:
+        ax.text(0.5, 0.5, "Waiting for traffic…", ha="center", va="center",
+                color="white", fontsize=14, transform=ax.transAxes)
+        ax.axis("off")
     fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
 
-    # ── Embed: col=11, spanning all left-column rows (10–40) ─────────────────
-    # Make window expandable so the new column can appear.
+    # ── Embed ─────────────────────────────────────────────────────────────────
     base.resizable(True, True)
     base.columnconfigure(11, weight=1)
 
-    # rowspan=31 covers rows 10 through 40 inclusive (the left column's extent).
-    # Empty intermediate rows (11-19, 21-29, …) have 0 height, so the panel
-    # fills the same vertical space as the controls + static graph combined.
     _container = tk.Frame(base, bg="#1e1e2e")
     _container.grid(row=10, column=11, rowspan=31, sticky="nsew",
                     padx=(8, 8), pady=(8, 8))
     _container.rowconfigure(1, weight=1)
     _container.columnconfigure(0, weight=1)
 
-    # Toolbar
     toolbar_row = tk.Frame(_container, bg="#2e2e3e")
     toolbar_row.grid(row=0, column=0, sticky="ew")
 
-    canvas_widget = FigureCanvasTkAgg(fig, master=_container)
-    nav = NavigationToolbar2Tk(canvas_widget, toolbar_row, pack_toolbar=False)
+    cw = FigureCanvasTkAgg(fig, master=_container)
+    nav = NavigationToolbar2Tk(cw, toolbar_row, pack_toolbar=False)
     nav.update()
     nav.pack(side=tk.LEFT)
     ttk.Button(toolbar_row, text="Close", command=_close).pack(
         side=tk.RIGHT, padx=4, pady=2)
 
-    canvas_widget.get_tk_widget().grid(row=1, column=0, sticky="nsew")
+    cw.get_tk_widget().grid(row=1, column=0, sticky="nsew")
 
-    # Info bar
-    info_var = tk.StringVar(value="Click a node for details  |  "
-                                  "Blue=LAN  Gray=Gateway  Red=Malicious  Purple=Tor")
+    default_info = ("📡 Live — updates every 4s  |  Blue=LAN  Gray=Gateway  Red=Malicious  Purple=Tor"
+                    if live else
+                    "Click a node for details  |  Blue=LAN  Gray=Gateway  Red=Malicious  Purple=Tor")
+    info_var = tk.StringVar(value=default_info)
     ttk.Label(_container, textvariable=info_var, anchor="w",
               padding=(6, 3)).grid(row=2, column=0, sticky="ew")
 
-    canvas_widget.draw()
+    cw.draw()
 
-    def _on_click(event):
-        if event.inaxes != ax or event.xdata is None:
-            return
-        closest, min_dist = None, float("inf")
-        for node, (x, y) in pos.items():
-            d = (event.xdata - x) ** 2 + (event.ydata - y) ** 2
-            if d < min_dist:
-                min_dist, closest = d, node
-        if closest is None or min_dist > 0.25:
-            return
-        ip = G.nodes[closest].get("ip", "?")
-        sessions = [s for s in memory.packet_db if ip in s.split("/")[:2]]
-        dst_host = memory.destination_hosts.get(ip)
-        domain = dst_host.domain_name if dst_host and dst_host.domain_name else "—"
-        protos = sorted({G[u][v][k].get("proto", "")
-                         for u, v, k in G.edges(keys=True)
-                         if u == closest or v == closest})
-        info_var.set(
-            f"Node: {closest}  |  IP: {ip}  |  Domain: {domain}  |  "
-            f"Sessions: {len(sessions)}  |  Protocols: {', '.join(protos)}"
-        )
-
-    fig.canvas.mpl_connect("button_press_event", _on_click)
+    # Store globals for refresh_live() and set_panel_title()
     _figure = fig
+    _ax = ax
+    _canvas_widget = cw
+    _info_var = info_var
+
+    # Click-to-inspect (only meaningful when G exists)
+    if G is not None:
+        def _on_click(event):
+            if event.inaxes != ax or event.xdata is None:
+                return
+            closest, min_dist = None, float("inf")
+            for node, (x, y) in pos.items():
+                d = (event.xdata - x) ** 2 + (event.ydata - y) ** 2
+                if d < min_dist:
+                    min_dist, closest = d, node
+            if closest is None or min_dist > 0.25:
+                return
+            ip = G.nodes[closest].get("ip", "?")
+            sessions = [s for s in memory.packet_db if ip in s.split("/")[:2]]
+            dst_host = memory.destination_hosts.get(ip)
+            domain = dst_host.domain_name if dst_host and dst_host.domain_name else "—"
+            protos = sorted({G[u][v][k].get("proto", "")
+                             for u, v, k in G.edges(keys=True)
+                             if u == closest or v == closest})
+            info_var.set(
+                f"Node: {closest}  |  IP: {ip}  |  Domain: {domain}  |  "
+                f"Sessions: {len(sessions)}  |  Protocols: {', '.join(protos)}"
+            )
+        fig.canvas.mpl_connect("button_press_event", _on_click)
 
     base.after(250, lambda: (base.lift(), base.focus_force()))
 
 
 def _close() -> None:
-    global _container, _figure, _base
+    global _container, _figure, _ax, _canvas_widget, _info_var, _base
     import matplotlib.pyplot as plt
     if _figure is not None:
         plt.close(_figure)
         _figure = None
+    _ax = None
+    _canvas_widget = None
+    _info_var = None
     if _container is not None and _container.winfo_exists():
         b = _container.winfo_toplevel()
         _container.destroy()
