@@ -216,6 +216,7 @@ def gimmick_initialize(base: tk.Tk, _html_path: str, live: bool = False) -> None
     # ── Embed ─────────────────────────────────────────────────────────────────
     base.resizable(True, True)
     base.columnconfigure(11, weight=1)
+    base.geometry(f"{base.winfo_width() + 700}x{max(base.winfo_height(), 600)}")
 
     _container = tk.Frame(base, bg="#1e1e2e")
     _container.grid(row=10, column=11, rowspan=31, sticky="nsew",
@@ -293,6 +294,7 @@ def _close() -> None:
         _container = None
         try:
             b.columnconfigure(11, weight=0, minsize=0)
+            b.geometry("")  # let Tkinter snap window back to natural content size
             b.resizable(False, False)
         except Exception as exc:
             log.warning("_close: could not restore window geometry: %s", exc)

@@ -526,18 +526,27 @@ class pcapXrayGui:
             self._canvas_h = probe.winfo_height() or 500
             self.zoom = [self._canvas_w, self._canvas_h]
             probe.destroy()
-            self.base.resizable(False, False)
+            self.base.resizable(True, True)
 
         self.canvas = Canvas(self.ThirdFrame, width=self._canvas_w, height=self._canvas_h,
                              bd=0, bg="navy",
                              xscrollcommand=self.xscrollbar.set,
                              yscrollcommand=self.yscrollbar.set)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
-        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize(tuple(self.zoom), Image.LANCZOS))
-        self.canvas.create_image(0, 0, image=self.img, anchor=NW)
-        self.canvas.config(scrollregion=self.canvas.bbox(ALL))
+        self._redraw_image()
         self.xscrollbar.config(command=self.canvas.xview)
         self.yscrollbar.config(command=self.canvas.yview)
+        self.canvas.bind("<Configure>", lambda e: self._redraw_image(e.width, e.height))
+
+    def _redraw_image(self, w=None, h=None):
+        if not hasattr(self, 'image_file') or not self.image_file:
+            return
+        w = w or self._canvas_w
+        h = h or self._canvas_h
+        self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize((w, h), Image.LANCZOS))
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, image=self.img, anchor=NW)
+        self.canvas.config(scrollregion=self.canvas.bbox(ALL))
 
     def map_select(self, *args):
         log.debug("map_select: option=%s to=%s from=%s", self.option.get(), self.to_ip.get(), self.from_ip.get())
@@ -582,6 +591,7 @@ def main():
     base = Tk()
     pcapXrayGui(base)
     def _reopen():
+        base.wm_state('normal')
         base.deiconify()
         base.attributes('-topmost', True)
         base.lift()
