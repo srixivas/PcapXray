@@ -541,8 +541,9 @@ class pcapXrayGui:
     def _redraw_image(self, w=None, h=None):
         if not hasattr(self, 'image_file') or not self.image_file:
             return
-        w = w or self._canvas_w
-        h = h or self._canvas_h
+        w = w or self.zoom[0]
+        h = h or self.zoom[1]
+        self.zoom = [w, h]
         self.img = ImageTk.PhotoImage(Image.open(self.image_file).resize((w, h), Image.LANCZOS))
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.img, anchor=NW)
@@ -561,23 +562,19 @@ class pcapXrayGui:
         self.base.after(100, self._force_focus)
 
     def zoom_in(self):
-        log.debug("zoom_in")
         self.zoom[0] += 100
         self.zoom[1] += 100
         if self.img:
-             self.load_image()
+            self._redraw_image(self.zoom[0], self.zoom[1])
 
     def zoom_out(self):
-        log.debug("zoom_out")
         min_w = getattr(self, '_canvas_w', 900)
         min_h = getattr(self, '_canvas_h', 500)
         if self.zoom[0] > min_w and self.zoom[1] > min_h:
             self.zoom[0] -= 100
             self.zoom[1] -= 100
-        else:
-            log.debug("zoom_out: already at minimum size")
         if self.img:
-             self.load_image()
+            self._redraw_image(self.zoom[0], self.zoom[1])
 
 class OtherFrame(Toplevel):
 
