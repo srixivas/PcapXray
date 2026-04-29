@@ -53,9 +53,11 @@ Make a network diagram with the following features:
 
 ## Screenshots
 
+*Main application panel*
 ![Main window](Samples/screen5_1_1.png)
 
-![Graph panel + matplotlib](Samples/screen5_1_2.png)
+*Static network graph with interactive matplotlib panel*
+![Network graph](Samples/screen5_1_2.png)
 
 ---
 
