@@ -53,10 +53,9 @@ Make a network diagram with the following features:
 
 ## Screenshots
 
-<!-- Replace with updated screenshots after v5.1 -->
-![Screen 1](Samples/screen2_6_1.png)
+![Main window](Samples/screen5_1_1.png)
 
-![Screen 2](Samples/screen2_6_2.png)
+![Graph panel + matplotlib](Samples/screen5_1_2.png)
 
 ---
 
